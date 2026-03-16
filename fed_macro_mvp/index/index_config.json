@@ -2,7 +2,7 @@
   "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
   "dimension": 384,
   "rows": 1551,
-  "created_utc": "2026-03-15T23:08:13.537655+00:00",
+  "created_utc": "2026-03-16T01:47:53.657955+00:00",
   "index_path": "/Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp/index/fed_chunks.index",
   "meta_path": "/Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp/index/fed_chunks_meta.parquet"
 }

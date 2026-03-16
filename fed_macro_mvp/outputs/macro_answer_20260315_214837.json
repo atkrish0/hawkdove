@@ -1,0 +1,113 @@
+{
+  "generated_at_utc": 1673523600,
+  "executive_summary": "Recent Federal Reserve communications suggest a nuanced macro view for the next 6-12 months.",
+  "regime_call": {
+    "growth_momentum": "Moderate",
+    "inflation_trend": "Tame",
+    "policy_bias": "Neutral",
+    "recession_risk": "Low",
+    "confidence": "0.7"
+  },
+  "topic_signals": [
+    {
+      "topic": "inflation",
+      "view": "Stable",
+      "confidence": "0.7",
+      "evidence": [
+        "fomcminutes20241107.pdf::chunk0011",
+        "20250207_mprfullreport.pdf::chunk0175"
+      ]
+    },
+    {
+      "topic": "unemployment",
+      "view": "Stable",
+      "confidence": "0.8",
+      "evidence": [
+        "fomcminutes20250917.pdf::chunk0020",
+        "fomcminutes20250319.pdf::chunk0000"
+      ]
+    },
+    {
+      "topic": "growth",
+      "view": "Moderate",
+      "confidence": "0.7",
+      "evidence": [
+        "20250207_mprfullreport.pdf::chunk0175",
+        "fomcprojtabl20250618.pdf::chunk0001"
+      ]
+    },
+    {
+      "topic": "policy_rates",
+      "view": "Neutral",
+      "confidence": "0.7",
+      "evidence": [
+        "20250207_mprfullreport.pdf::chunk0175",
+        "fomcminutes20250507.pdf::chunk0008"
+      ]
+    },
+    {
+      "topic": "financial_conditions",
+      "view": "Stable",
+      "confidence": "0.7",
+      "evidence": [
+        "fomcminutes20240918.pdf::chunk0000",
+        "20250620_mprfullreport.pdf::chunk0013"
+      ]
+    },
+    {
+      "topic": "credit",
+      "view": "Neutral",
+      "confidence": "0.6",
+      "evidence": [
+        "fomcminutes20241107.pdf::chunk0016",
+        "fomcminutes20260128.pdf::chunk0016"
+      ]
+    }
+  ],
+  "investor_takeaways": [
+    {
+      "horizon": "Short-Term",
+      "thesis": "The Federal Reserve's recent communications suggest a stable macro environment.",
+      "evidence": [
+        "fomcminutes20241107.pdf::chunk0011",
+        "20250207_mprfullreport.pdf::chunk0175",
+        "fomcminutes20250917.pdf::chunk0020",
+        "fomcminutes20250319.pdf::chunk0000"
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "chunk_id": "fomcminutes20241107.pdf::chunk0011",
+      "doc_id": "fomcminutes20241107.pdf"
+    },
+    {
+      "chunk_id": "20250207_mprfullreport.pdf::chunk0175",
+      "doc_id": "20250207_mprfullreport.pdf"
+    },
+    {
+      "chunk_id": "fomcminutes20250917.pdf::chunk0020",
+      "doc_id": "fomcminutes20250917.pdf"
+    },
+    {
+      "chunk_id": "fomcminutes20250319.pdf::chunk0000",
+      "doc_id": "fomcminutes20250319.pdf"
+    },
+    {
+      "chunk_id": "fomcprojtabl20250618.pdf::chunk0001",
+      "doc_id": "fomcprojtabl20250618.pdf"
+    },
+    {
+      "chunk_id": "fomcminutes20250507.pdf::chunk0008",
+      "doc_id": "fomcminutes20250507.pdf"
+    },
+    {
+      "chunk_id": "fomcminutes20240918.pdf::chunk0000",
+      "doc_id": "fomcminutes20240918.pdf"
+    },
+    {
+      "chunk_id": "20250620_mprfullreport.pdf::chunk0013",
+      "doc_id": "20250620_mprfullreport.pdf"
+    }
+  ]
+}

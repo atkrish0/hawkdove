@@ -1,0 +1,65 @@
+{
+"generated_at_utc": "" ,
+"executive_summary": "The Federal Reserve's recent communications suggest a nuanced macro view for the US economy over the next 6-12 months.",
+"regime_call": {
+"growth_momentum": "Moderate",
+"inflation_trend": "Upside risks persisting, albeit smaller than previously",
+"policy_bias": "Gradual approach to recalibrating monetary policy stance",
+"recession_risk": "Skewed to the downside due to potential tighter financial conditions and slower aggregate demand growth",
+"confidence": "" },
+"topic_signals": [
+{
+"topic": "inflation",
+"view": "Upside risks persisting, albeit smaller than previously",
+"why_it_matters": "Inflation expectations and monetary policy decisions",
+"confidence": "",
+"evidence": ["fomcminutes20241107.pdf::chunk0011", "20250207_mprfullreport.pdf::chunk0175", "fomcminutes20240731.pdf::chunk0016"]
+},
+{
+"topic": "unemployment",
+"view": "Gradual easing in labor market conditions, with no source of inflationary pressure",
+"why_it_matters": "Labor market dynamics and maximum employment goal",
+"confidence": "",
+"evidence": ["fomcminutes20250917.pdf::chunk0020", "fomcminutes20250319.pdf::chunk0000", "fomcminutes20241218.pdf::chunk0022"]
+},
+{
+"topic": "growth",
+"view": "Moderate growth momentum",
+"why_it_matters": "Economic activity and monetary policy decisions",
+"confidence": "",
+"evidence": ["fomcminutes20241107.pdf::chunk0011", "20250207_mprfullreport.pdf::chunk0175"]
+},
+{
+"topic": "policy_rates",
+"view": "Gradual approach to recalibrating monetary policy stance",
+"why_it_matters": "Monetary policy decisions and inflation expectations",
+"confidence": "",
+"evidence": ["fomcminutes20241107.pdf::chunk0011", "fomcminutes20240731.pdf::chunk0016"]
+},
+{
+"topic": "financial_conditions",
+"view": "Upside risks persisting, albeit smaller than previously",
+"why_it_matters": "Financial market quotes and monetary policy decisions",
+"confidence": "",
+"evidence": ["fomcminutes20241107.pdf::chunk0011", "20250207_mprfullreport.pdf::chunk0175"]
+},
+{
+"topic": "credit",
+"view": "No specific signal",
+"why_it_matters": "Credit market dynamics and economic activity",
+"confidence": "",
+"evidence": []
+}
+],
+"investor_takeaways": [
+{
+"horizon": "6-12 months",
+"thesis": "Moderate growth momentum with upside risks persisting in inflation",
+"implications_for_risk_assets": "Gradual easing in labor market conditions and moderate growth momentum",
+"monitoring_triggers": ["Inflation expectations", "Labor market indicators"],
+"evidence": ["fomcminutes20241107.pdf::chunk0011", "20250207_mprfullreport.pdf::chunk0175", "fomcminutes20240731.pdf::chunk0016"]
+}
+],
+"citations": [
+{
+"chunk_id": "fom

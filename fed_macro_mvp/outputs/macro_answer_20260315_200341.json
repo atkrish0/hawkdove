@@ -1,0 +1,81 @@
+{
+  "executive_summary": "The latest Federal Reserve communications suggest a 6-12 month view on inflation, unemployment, growth, and policy rates.",
+  "outlook_horizon": {
+    "view": "Medium-term",
+    "evidence": [
+      "Economic projections provided by the members of the Board of Governors and the presidents of the Federal Reserve Banks"
+    ]
+  },
+  "inflation": {
+    "view": "Moderate",
+    "evidence": [
+      "Consumer price index releases",
+      "Inflation expectations obtained from term structures"
+    ]
+  },
+  "unemployment": {
+    "view": "Low",
+    "evidence": [
+      "Unemployment rate",
+      "Job vacancies",
+      "Employment-to-population (EPOP) ratio",
+      "Labor force participation rate"
+    ]
+  },
+  "growth": {
+    "view": "Moderate",
+    "evidence": [
+      "Real GDP growth",
+      "Nominal Treasury yields",
+      "Equity prices"
+    ]
+  },
+  "policy_rates": {
+    "view": "Gradual easing",
+    "evidence": [
+      "Federal funds rate",
+      "Monetary policy communications"
+    ]
+  },
+  "risks": {
+    "view": "Moderate",
+    "evidence": [
+      "Surprises in economic data",
+      "Inflation expectations",
+      "Financial market developments"
+    ]
+  },
+  "confidence": {
+    "view": "Medium",
+    "evidence": [
+      "Economic projections provided by the members of the Board of Governors and the presidents of the Federal Reserve Banks",
+      "Review of monetary policy framework"
+    ]
+  },
+  "citations": [
+    {
+      "chunk_id": "20250620_mprfullreport.pdf::chunk0125",
+      "why_relevant": "Provides economic projections"
+    },
+    {
+      "chunk_id": "20250207_mprfullreport.pdf::chunk0114",
+      "why_relevant": "Discusses monetary policy framework review"
+    },
+    {
+      "chunk_id": "20250620_mprfullreport.pdf::chunk0105",
+      "why_relevant": "Provides insights into labor market dynamics and maximum employment goal"
+    },
+    {
+      "chunk_id": "fomcminutes20240731.pdf::chunk0000",
+      "why_relevant": "Reviews financial market developments and open market operations"
+    },
+    {
+      "chunk_id": "fomcminutes20250319.pdf::chunk0000",
+      "why_relevant": "Discusses labor market dynamics and maximum employment goal"
+    },
+    {
+      "chunk_id": "fomcprojtabl20250319.pdf::chunk0023",
+      "why_relevant": "Provides forecast uncertainty analysis"
+    }
+  ]
+}

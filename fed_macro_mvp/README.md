@@ -41,6 +41,8 @@ Not included yet:
 - `pypdf` for PDF text extraction
 - `sentence-transformers` for embeddings
 - `faiss-cpu` for vector similarity search
+- `scikit-learn` for sparse lexical retrieval (TF-IDF)
+- `json-repair` for robust recovery of malformed JSON generations
 - `ollama` Python client for local LLM inference
 - `pyarrow` for Parquet support (with CSV fallback in notebook if unavailable)
 - `pandas`/`numpy` for data handling
@@ -58,6 +60,18 @@ Everything for this restart is inside this folder.
 fed_macro_mvp/
 ├── README.md
 ├── fed_macro_mvp.ipynb
+├── fed_macro_mvp_streamlined.ipynb
+├── core/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── ingest.py
+│   ├── indexing.py
+│   ├── retrieval.py
+│   ├── generation.py
+│   ├── validation.py
+│   ├── analysis.py
+│   ├── artifacts.py
+│   └── pipeline.py
 ├── data/
 │   ├── raw_pdfs/
 │   └── processed/
@@ -93,7 +107,8 @@ If your model tag differs, update `OLLAMA_MODEL` in the notebook config cell.
 ## 6. Step-by-step runbook
 
 Open:
-- `fed_macro_mvp/fed_macro_mvp.ipynb`
+- `fed_macro_mvp/fed_macro_mvp_streamlined.ipynb` (recommended)
+- `fed_macro_mvp/fed_macro_mvp.ipynb` (legacy/full notebook retained)
 
 Run cells top-to-bottom:
 
@@ -112,6 +127,22 @@ Run cells top-to-bottom:
      - `MAX_PDFS`
      - `TOP_K`
      - `OLLAMA_MODEL`
+   - Tune latency/quality controls:
+     - `TOP_K_TOPIC`
+     - `CONTEXT_CHUNKS_PER_TOPIC`
+     - `MAX_CHARS_PER_CHUNK`
+     - `MAX_CONTEXT_CHARS`
+     - `OLLAMA_NUM_PREDICT`
+     - `OLLAMA_NUM_CTX`
+     - `OLLAMA_TEMPERATURE`
+     - `ENABLE_HYBRID_RETRIEVAL`
+     - `ENABLE_QUERY_FUSION`
+     - `ENABLE_RERANKER`
+     - `RERANK_MODEL_NAME`
+     - `OLLAMA_MAX_RETRIES`
+     - `RETRY_CONTEXT_SHRINK`
+     - `RETRY_PREDICT_SHRINK`
+     - `USE_JSON_REPAIR`
 
 3. **Discover + download Federal Reserve PDFs**
    - Scrapes PDF links from configured Fed seed pages.
@@ -131,18 +162,43 @@ Run cells top-to-bottom:
    - Saves index + metadata + index config.
 
 5. **Retrieval + local LLM macro synthesis**
-   - Embeds user query.
-   - Retrieves top-k chunks from FAISS.
-   - Sends context + instructions to Ollama model.
-   - Requests strict JSON output containing:
-     - executive summary
-     - inflation/unemployment/growth/policy-rates/risk views
+   - Runs targeted retrieval per investor-relevant macro topic:
+     - inflation
+     - unemployment
+     - growth
+     - policy rates
+     - financial conditions
+     - credit
+   - Uses robust hybrid retrieval:
+     - dense semantic retrieval (FAISS)
+     - sparse lexical retrieval (TF-IDF)
+     - reciprocal-rank fusion (RRF)
+   - Optional cross-encoder reranking on top candidate pool (safe fallback when disabled or unavailable).
+   - Uses query-fusion per topic with deterministic query variants.
+   - Applies recency-aware scoring so newer Fed communication receives moderate preference.
+   - Extracts topic-focused snippets to reduce context length and latency.
+   - Reserves context budget across topics so one compact evidence chunk per topic is favored before adding more detail.
+   - Sends compact, structured context to Ollama with speed-oriented options (`num_predict`, `num_ctx`, low temperature).
+   - Requests investor-grade strict JSON output containing:
+     - regime call
+     - topic signals
+     - investor takeaways by horizon
      - evidence links (`chunk_id`-based citations)
+   - Prints retrieval and LLM latency to make runtime bottlenecks explicit.
+   - Uses retry fallback for generation: if parsing/quality fails, retries with smaller context and lower `num_predict`.
+   - Uses robust JSON parsing with balanced-object extraction and optional `json-repair`.
+   - Includes final JSON-repair fallback via a short local LLM “repair pass” when direct parsing fails.
+   - Applies deterministic post-processing to coerce near-valid outputs into schema-compliant JSON:
+     - topic normalization (`policy_rate` -> `policy_rates`, etc.)
+     - chunk ID normalization/fixing for common format drift
+     - evidence/citation backfill from retrieved topic hits when sparse
+   - Notebook display now prints normalized/coerced JSON (`analysis_result['normalized_json_text']`) when available.
 
 6. **Basic MVP quality checks**
    - Parse JSON from model output.
-   - Verify section presence.
-   - Verify citation chunk IDs exist in retrieved context.
+   - Verify schema shape and section presence.
+   - Verify citation and evidence chunk IDs exist in retrieved context.
+   - Verify expected macro topics are covered.
 
 7. **Save artifacts**
    - Writes retrieval table and model outputs under `outputs/`.
@@ -156,8 +212,12 @@ As of **March 15, 2026**:
 - [x] Local/open-source components only in current workflow.
 - [x] Retrieval-backed generation with citation validation hooks.
 - [x] Output persistence for reproducibility.
+- [x] Hybrid retrieval (dense + sparse + RRF) with recency-aware ranking.
+- [x] Topic query-fusion for investor-focused evidence gathering.
+- [x] Optional cross-encoder reranking stage with safe fallback.
+- [x] Core analysis split into `retrieval.py`, `generation.py`, and `validation.py` for cleaner notebooks and maintainability.
 - [ ] Real run validation against live Federal Reserve endpoints in this environment.
-- [ ] Prompt/schema hardening for stricter JSON reliability.
+- [x] Prompt/schema hardening for stricter JSON reliability.
 - [ ] Better source filtering (document type/date relevance ranking).
 
 ## 8. Known limitations in v1
@@ -189,15 +249,29 @@ As of **March 15, 2026**:
 4. **Model output not valid JSON**
    - Reduce temperature.
    - Tighten prompt instructions.
-   - Add a response-repair pass in a future iteration.
+   - Keep retry logic enabled (`OLLAMA_MAX_RETRIES`).
+   - Reduce `MAX_CONTEXT_CHARS` and `OLLAMA_NUM_PREDICT`.
+   - Keep `USE_JSON_REPAIR = True`.
+   - Keep `CONTEXT_CHUNKS_PER_TOPIC = 1` for faster, more stable structure completion.
 
-## 10. Next recommended enhancements
+5. **Section 4 is too slow**
+   - Reduce `TOP_K_TOPIC` (for example `3 -> 2`).
+   - Reduce `MAX_CHARS_PER_CHUNK` and `MAX_CONTEXT_CHARS`.
+   - Reduce `OLLAMA_NUM_PREDICT`.
+   - Keep `ENABLE_RERANKER = False` for fastest baseline.
+   - Use a faster local model if needed.
 
-1. Add Federal Reserve speech/testimony PDF sources with metadata filtering.
-2. Add re-ranking to improve retrieval precision.
-3. Add periodic ingestion (daily/weekly) and incremental index update.
-4. Add dedicated evaluation dataset for macro topics.
-5. Build a thin web interface once notebook behavior is stable.
+## 10. Enhancement Priority (Robustness First)
+
+Ordered by implementation realism and low bug risk.
+
+1. **Hybrid retrieval + query-fusion + recency scoring** (`Implemented`)
+2. **Schema-constrained investor output + strict validation** (`Implemented`)
+3. **Cross-encoder reranking on top-N candidates** (`Implemented, optional toggle`)
+4. **Evaluation harness (RAGAS + TruLens) integrated into run path** (`Next`)
+5. **Broader source coverage (Fed speeches/testimony) + source quality filters** (`Next`)
+6. **Scheduled incremental ingestion + index refresh** (`Next`)
+7. **Web interface over stable notebook workflow** (`Later`)
 
 ## 11. Living change log
 
@@ -206,3 +280,22 @@ As of **March 15, 2026**:
 - Built notebook `fed_macro_mvp.ipynb` with end-to-end MVP pipeline.
 - Added this comprehensive README as the implementation source of truth.
 - Added parquet resilience: default `pyarrow` dependency plus automatic CSV fallback for table persistence.
+- Tightened generation schema and validation checks so section-level `evidence` is validated as retrieved `chunk_id` references, not free-text claims.
+- Refactored Section 4 for speed and investor use-case:
+  - topic-targeted retrieval
+  - context compaction per topic
+  - explicit investor-grade JSON schema (`regime_call`, `topic_signals`, `investor_takeaways`)
+  - stronger validation for evidence IDs and citations
+- Added Ollama schema-constrained generation (`format=<JSON schema>`) for more reliable structured output.
+- Added topic coverage validation so outputs are checked for all expected macro topics.
+- Added robustness-first retrieval stack:
+  - dense + sparse hybrid retrieval
+  - reciprocal-rank fusion (RRF)
+  - deterministic per-topic query fusion
+  - recency-aware ranking boost
+- Added optional reranker tier (`ENABLE_RERANKER`) using a cross-encoder over top candidates with safe fallback.
+- Added explicit `scikit-learn` dependency for sparse retrieval.
+- Added generation retry/fallback logic to reduce JSON truncation failures under slow local inference.
+- Added robust parse recovery path (`extract_balanced_json` + `json-repair`) for malformed/partially emitted JSON.
+- Added a compact generation contract and conservative retry schedule to reduce truncation and malformed JSON rates on CPU-bound local models.
+- Refactored notebook code into modular Python files under `core/` and added a streamlined orchestrator notebook (`fed_macro_mvp_streamlined.ipynb`).
