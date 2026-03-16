@@ -10,6 +10,46 @@ import pandas as pd
 REQUIRED_TOPICS = ["inflation", "unemployment", "growth", "policy_rates", "financial_conditions", "credit"]
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _clean_text(s: str) -> str:
+    return re.sub(r"\s+", " ", str(s or "")).strip()
+
+
+def _quote_snippet(text: str, max_chars: int = 220) -> str:
+    clean = _clean_text(text)
+    if not clean:
+        return ""
+
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", clean) if p.strip()]
+    if not parts:
+        return clean[:max_chars]
+
+    out = parts[0]
+    i = 1
+    while i < len(parts) and len(out) < max_chars:
+        out = f"{out} {parts[i]}"
+        i += 1
+    return out[:max_chars]
+
+
+def _chunk_text_lookup(topic_hits: dict[str, pd.DataFrame]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for _, df in topic_hits.items():
+        if df is None or df.empty:
+            continue
+        for _, row in df.iterrows():
+            cid = str(row.get("chunk_id", "")).strip()
+            if not cid:
+                continue
+            txt = str(row.get("text", "") or "")
+            if cid not in lookup and txt:
+                lookup[cid] = txt
+    return lookup
+
+
 def canonical_topic_name(topic: str) -> str:
     t = str(topic or "").strip().lower().replace("-", "_").replace(" ", "_")
     aliases = {
@@ -89,9 +129,8 @@ def fallback_ids_by_topic(topic_hits: dict[str, pd.DataFrame]) -> dict[str, list
 def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFrame], valid_ids: set[str]) -> dict[str, Any]:
     obj = parsed if isinstance(parsed, dict) else {}
 
-    obj.setdefault("generated_at_utc", datetime.now(timezone.utc).isoformat())
-    if not str(obj.get("generated_at_utc", "")).strip() or obj.get("generated_at_utc") == "{timestamp}":
-        obj["generated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    # Always stamp generation time to the current run in normalized ISO UTC format.
+    obj["generated_at_utc"] = _utc_now_iso()
 
     obj["executive_summary"] = str(obj.get("executive_summary") or "Macro view generated from retrieved Federal Reserve communications.")
 
@@ -111,6 +150,7 @@ def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFr
     obj["regime_call"] = regime
 
     fbt = fallback_ids_by_topic(topic_hits)
+    text_lookup = _chunk_text_lookup(topic_hits)
 
     existing_map: dict[str, dict[str, Any]] = {}
     topic_signals = obj.get("topic_signals")
@@ -182,6 +222,7 @@ def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFr
                 {
                     "chunk_id": cid,
                     "doc_id": cid.split("::")[0],
+                    "quote": _quote_snippet(text_lookup.get(cid, "")),
                 }
             )
             if len(norm_citations) >= 8:
@@ -192,7 +233,13 @@ def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFr
             if cid in seen:
                 continue
             seen.add(cid)
-            norm_citations.append({"chunk_id": cid, "doc_id": cid.split("::")[0]})
+            norm_citations.append(
+                {
+                    "chunk_id": cid,
+                    "doc_id": cid.split("::")[0],
+                    "quote": _quote_snippet(text_lookup.get(cid, "")),
+                }
+            )
             if len(norm_citations) >= 8:
                 break
 
@@ -201,8 +248,7 @@ def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFr
 
 
 def postprocess_obj(obj: dict[str, Any]) -> dict[str, Any]:
-    if not str(obj.get("generated_at_utc", "")).strip() or obj.get("generated_at_utc") == "{timestamp}":
-        obj["generated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    obj["generated_at_utc"] = _utc_now_iso()
     return obj
 
 

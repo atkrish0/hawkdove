@@ -1,0 +1,121 @@
+{
+  "generated_at_utc": "2026-03-16T03:53:42Z",
+  "executive_summary": "Recent Federal Reserve communications suggest a nuanced macro view for the next 6-12 months.",
+  "regime_call": {
+    "growth_momentum": "Moderate",
+    "inflation_trend": "Tame",
+    "policy_bias": "Neutral",
+    "recession_risk": "Low",
+    "confidence": "0.7"
+  },
+  "topic_signals": [
+    {
+      "topic": "inflation",
+      "view": "Stable",
+      "confidence": "0.7",
+      "evidence": [
+        "fomcminutes20241107.pdf::chunk0011",
+        "20250207_mprfullreport.pdf::chunk0175"
+      ]
+    },
+    {
+      "topic": "unemployment",
+      "view": "Stable",
+      "confidence": "0.8",
+      "evidence": [
+        "fomcminutes20250917.pdf::chunk0020",
+        "fomcminutes20250319.pdf::chunk0000"
+      ]
+    },
+    {
+      "topic": "growth",
+      "view": "Moderate",
+      "confidence": "0.7",
+      "evidence": [
+        "20250207_mprfullreport.pdf::chunk0175",
+        "fomcprojtabl20250618.pdf::chunk0001"
+      ]
+    },
+    {
+      "topic": "policy_rates",
+      "view": "Neutral",
+      "confidence": "0.7",
+      "evidence": [
+        "20250207_mprfullreport.pdf::chunk0175",
+        "fomcminutes20250507.pdf::chunk0008"
+      ]
+    },
+    {
+      "topic": "financial_conditions",
+      "view": "Stable",
+      "confidence": "0.7",
+      "evidence": [
+        "fomcminutes20240918.pdf::chunk0000",
+        "20250620_mprfullreport.pdf::chunk0013"
+      ]
+    },
+    {
+      "topic": "credit",
+      "view": "Neutral",
+      "confidence": "0.6",
+      "evidence": [
+        "fomcminutes20241107.pdf::chunk0016",
+        "fomcminutes20260128.pdf::chunk0016"
+      ]
+    }
+  ],
+  "investor_takeaways": [
+    {
+      "horizon": "Short-Term",
+      "thesis": "The Federal Reserve's recent communications suggest a stable macro environment.",
+      "evidence": [
+        "fomcminutes20241107.pdf::chunk0011",
+        "20250207_mprfullreport.pdf::chunk0175",
+        "fomcminutes20250917.pdf::chunk0020",
+        "fomcminutes20250319.pdf::chunk0000"
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "chunk_id": "fomcminutes20241107.pdf::chunk0011",
+      "doc_id": "fomcminutes20241107.pdf",
+      "quote": "Financial Situation The expected path of the federal funds rate implied by financial market quotes increased notably over the intermeeting period amid stronger-than-expected data releases pertaining to economic activity,"
+    },
+    {
+      "chunk_id": "20250207_mprfullreport.pdf::chunk0175",
+      "doc_id": "20250207_mprfullreport.pdf",
+      "quote": ".\u201d Figure 47. Selected interest rates Department of the Treasury; Federal Reserve Board. Figure 48. Federal Reserve assets and liabilities Federal Reserve Board, Statistical Release H.4.1, \u201cFactors Affecting Reserve Bala"
+    },
+    {
+      "chunk_id": "fomcminutes20250917.pdf::chunk0020",
+      "doc_id": "fomcminutes20250917.pdf",
+      "quote": "he unemployment rate had edged up. Participants noted that the low level of estimated job gains over recent months likely reflected declines in growth of both labor supply and labor demand. Participants noted low net imm"
+    },
+    {
+      "chunk_id": "fomcminutes20250319.pdf::chunk0000",
+      "doc_id": "fomcminutes20250319.pdf",
+      "quote": "FOMC FEDERAL RESERVE SYSTEM Minutes of the Federal Open Market Committee March 18\u201319, 2025 Minutes of the Federal Open Market Committee March 18\u201319, 2025 A joint meeting of the Federal Open Market Committee and the Board"
+    },
+    {
+      "chunk_id": "fomcprojtabl20250618.pdf::chunk0001",
+      "doc_id": "fomcprojtabl20250618.pdf",
+      "quote": "most likely to foster outcomes for economic activity and in\ufb02ation that best satisfy his or her individual interpretation of the statutory mandate to promote maximum employment and price stability. Page 1 of 17 F or relea"
+    },
+    {
+      "chunk_id": "fomcminutes20250507.pdf::chunk0008",
+      "doc_id": "fomcminutes20250507.pdf",
+      "quote": "lable data pointed to modest outflows from fixed-income securities that were largely offset by inflows into equity securities. The manager, however, observed that large global investors tend to change their investment st"
+    },
+    {
+      "chunk_id": "fomcminutes20240918.pdf::chunk0000",
+      "doc_id": "fomcminutes20240918.pdf",
+      "quote": "1 Minutes of the Federal Open Market Committee September 17\u201318, 2024 A joint meeting of the Federal Open Market Committee and the Board of Governors of the Federal Reserve System was held in the offices of the Board of G"
+    },
+    {
+      "chunk_id": "20250620_mprfullreport.pdf::chunk0013",
+      "doc_id": "20250620_mprfullreport.pdf",
+      "quote": "well as manufacturing output, rose solidly in the first quarter, although manufacturing has shown signs of weakness more recently. In the housing market, new home construction has softened slightly this year, while exist"
+    }
+  ]
+}

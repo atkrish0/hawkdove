@@ -184,6 +184,7 @@ Run cells top-to-bottom:
      - topic signals
      - investor takeaways by horizon
      - evidence links (`chunk_id`-based citations)
+     - citation quotes (short verbatim snippets from retrieved chunk text)
    - Prints retrieval and LLM latency to make runtime bottlenecks explicit.
    - Uses retry fallback for generation: if parsing/quality fails, retries with smaller context and lower `num_predict`.
    - Uses robust JSON parsing with balanced-object extraction and optional `json-repair`.
@@ -193,6 +194,8 @@ Run cells top-to-bottom:
      - chunk ID normalization/fixing for common format drift
      - evidence/citation backfill from retrieved topic hits when sparse
    - Notebook display now prints normalized/coerced JSON (`analysis_result['normalized_json_text']`) when available.
+   - `generated_at_utc` is normalized to current-run ISO UTC format.
+   - Section 4 displays a citation preview table (`doc_id`, `chunk_id`, `quote`) for investor readability.
 
 6. **Basic MVP quality checks**
    - Parse JSON from model output.

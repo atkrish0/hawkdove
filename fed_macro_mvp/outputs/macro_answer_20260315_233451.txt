@@ -1,0 +1,25 @@
+{
+"generated_at_utc": 1673523600,
+"executive_summary": "Recent Federal Reserve communications suggest a nuanced macro view for the next 6-12 months.",
+"regime_call": {
+    "growth_momentum": "Moderate",
+    "inflation_trend": "Tame",
+    "policy_bias": "Neutral",
+    "recession_risk": "Low",
+    "confidence": 0.7
+},
+"topic_signals": [
+    {"topic": "inflation", "view": "Stable", "confidence": 0.7, "evidence": ["nominal Treasury yields declined notably over the period"]},
+    {"topic": "unemployment", "view": "Stable", "confidence": 0.8, "evidence": ["low level of estimated job gains over recent months"]},
+    {"topic": "growth", "view": "Moderate", "confidence": 0.7, "evidence": ["stronger-than-expected data releases pertaining to economic activity"]},
+    {"topic": "policy_rates", "view": "Neutral", "confidence": 0.7, "evidence": ["affirming expectations that a reduction in policy restraint would begin at this meeting"]},
+    {"topic": "financial_conditions", "view": "Stable", "confidence": 0.7, "evidence": ["nominal Treasury yields declined notably over the period"]},
+    {"topic": "credit", "view": "Neutral", "confidence": 0.6, "evidence": []}
+],
+"investor_takeaways": [
+    {
+        "horizon": "Short-Term",
+        "thesis": "The Federal Reserve's recent communications suggest a stable macro environment.",
+        "evidence": ["nominal Treasury yields declined notably over the period"]
+    },
+   

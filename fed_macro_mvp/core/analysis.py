@@ -52,11 +52,27 @@ def run_analysis(cfg: PipelineConfig) -> dict[str, object]:
     llm_latency = time.time() - llm_t0
 
     normalized_json_text = llm_text
+    citation_preview_df = pd.DataFrame(columns=["chunk_id", "doc_id", "quote"])
     if parsed is not None:
         try:
             normalized_json_text = json.dumps(parsed, indent=2, ensure_ascii=False)
         except Exception:
             normalized_json_text = llm_text
+        citations = parsed.get("citations", []) if isinstance(parsed, dict) else []
+        if isinstance(citations, list):
+            rows = []
+            for c in citations:
+                if not isinstance(c, dict):
+                    continue
+                rows.append(
+                    {
+                        "chunk_id": str(c.get("chunk_id", "")),
+                        "doc_id": str(c.get("doc_id", "")),
+                        "quote": str(c.get("quote", "")),
+                    }
+                )
+            if rows:
+                citation_preview_df = pd.DataFrame(rows)
 
     return {
         "question": question,
@@ -68,6 +84,7 @@ def run_analysis(cfg: PipelineConfig) -> dict[str, object]:
         "parsed": parsed,
         "quality": quality,
         "attempt_log": attempt_log,
+        "citation_preview_df": citation_preview_df,
         "final_context": final_context,
         "context_chunk_ids": context_chunk_ids,
         "sparse_enabled": sparse_bundle is not None,
