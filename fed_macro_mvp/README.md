@@ -1,81 +1,70 @@
 # Federal Reserve Macro Insights MVP
 
-Notebook-first, local/open-source pipeline for gathering Federal Reserve communications (PDFs) and generating a structured macroeconomic view (inflation, unemployment, growth, policy rates, risk framing) with retrieval-backed citations.
+A notebook-first, local/open-source Retrieval-Augmented Generation (RAG) system that ingests Federal Reserve communications (PDFs), retrieves high-signal evidence, and generates a structured investor-focused U.S. macro view.
 
-## 1. Purpose
+## 1) What This Project Is
+This section defines the project in one sentence and sets expectations.
 
-This restart focuses on a **minimum viable product** that is:
-- US/Federal Reserve focused
-- Free/open-source stack only
-- Reproducible from a single Jupyter notebook
-- Easy to extend into a web app later
+This repository is built as a practical MVP for interview-level walkthroughs and real local usage:
+- It scrapes and probes Federal Reserve PDF sources.
+- It extracts/chunks text and builds a local retrieval index.
+- It retrieves topic-specific evidence for macro themes (inflation, unemployment, growth, policy rates, financial conditions, credit).
+- It uses a local Ollama model to produce strict JSON analysis with citations and quote snippets.
+- It includes a technical notebook and a user-facing investor UI notebook.
 
-Primary goal:
-1. Retrieve publicly available Federal Reserve communication PDFs.
-2. Parse content and build a local retrieval index.
-3. Use a local LLM end-to-end for structured macro insight generation.
+## 2) Problem Statement and Product Goal
+This section explains why the architecture exists and what outcome it optimizes for.
 
-## 2. Scope of v1
+Goal:
+1. Build a local, reproducible pipeline to analyze recent Fed communications.
+2. Produce investor-usable macro outputs quickly (recency- and relevance-biased).
+3. Keep architecture simple and robust enough to run repeatedly on a laptop.
 
-Included:
-- Discovery of Federal Reserve PDFs via:
-  - Seed-page scraping
-  - Known filename/date pattern probing
-- PDF download + local storage
-- Text extraction and chunking
-- Semantic embeddings (SentenceTransformers)
-- FAISS vector retrieval
-- Local LLM synthesis through Ollama
-- Basic output traceability checks (JSON parse + citation ID validation)
-- Artifact persistence for reproducibility
-- Interactive in-notebook investor UI (`ipywidgets`) for guided runs and topic drilldown
+Non-goals for this MVP:
+- No external hosted LLM APIs.
+- No production web backend yet.
+- No heavy evaluation framework integration (RAGAS/TruLens deferred).
 
-Not included yet:
-- External web app (outside notebook)
-- Scheduling/orchestration
-- Advanced evaluation framework (RAGAS/TruLens)
-- Quantitative time-series extraction and charting
+## 3) Current Status (as of March 18, 2026)
+This section gives the current implementation state at a glance.
 
-## 3. Technology choices (open source)
+Implemented:
+- End-to-end ingestion -> indexing -> retrieval -> generation -> validation -> persistence.
+- Runtime profiles (`fast_default`, `full_default`).
+- Hybrid retrieval (dense FAISS + sparse TF-IDF + RRF fusion).
+- Optional reranker stage.
+- Robust JSON handling (balanced extraction, json-repair, retry/repair flow).
+- Evidence hygiene (topic evidence enforcement, citation normalization, quote snippets).
+- Investor UI notebook backed by modular Python code.
+- Tests for profile behavior, catalog filtering, and evidence coercion/validation.
 
-- `requests` + `beautifulsoup4` for web scraping
-- `pypdf` for PDF text extraction
-- `sentence-transformers` for embeddings
-- `faiss-cpu` for vector similarity search
-- `scikit-learn` for sparse lexical retrieval (TF-IDF)
-- `json-repair` for robust recovery of malformed JSON generations
-- `ollama` Python client for local LLM inference
-- `pyarrow` for Parquet support (with CSV fallback in notebook if unavailable)
-- `pandas`/`numpy` for data handling
-- `ipywidgets` for interactive notebook UI
+Deferred:
+- Full incremental indexing workflow.
+- Page-level PDF citations.
+- Evaluation suite (RAGAS/TruLens) and historical backtesting dashboard.
 
-Why this stack:
-- No paid API dependency required
-- Runs locally and supports iteration speed
-- Keeps architecture simple enough for MVP but extensible
-
-## 4. Folder structure
-
-Everything for this restart is inside this folder.
+## 4) Project Layout
+This section is your file-system map for quick orientation.
 
 ```text
 fed_macro_mvp/
 ├── README.md
-├── fed_macro_v1.ipynb
-├── fed_macro_v2.ipynb
-├── fed_macro_v3_investor_ui.ipynb
+├── requirements.txt
+├── fed_macro_v1.ipynb                # legacy notebook (kept for history)
+├── fed_macro_v2.ipynb                # technical workflow notebook
+├── fed_macro_v3_investor_ui.ipynb    # user-facing interactive notebook UI
 ├── core/
 │   ├── __init__.py
-│   ├── config.py
-│   ├── ingest.py
-│   ├── indexing.py
-│   ├── retrieval.py
-│   ├── generation.py
-│   ├── validation.py
-│   ├── analysis.py
-│   ├── investor_ui.py
-│   ├── artifacts.py
-│   └── pipeline.py
+│   ├── config.py                     # central config + profile logic + paths
+│   ├── ingest.py                     # discovery, filtering, download
+│   ├── indexing.py                   # parse PDFs, chunk text, embeddings, FAISS
+│   ├── retrieval.py                  # dense+sparse retrieval, RRF, recency, context build
+│   ├── generation.py                 # Ollama generation + retries + JSON parsing/repair
+│   ├── validation.py                 # schema coercion, evidence/citation checks, normalization
+│   ├── analysis.py                   # orchestration of retrieval + generation + metrics
+│   ├── artifacts.py                  # output save utilities
+│   ├── pipeline.py                   # notebook-facing pipeline wrappers
+│   └── investor_ui.py                # ipywidgets UI components and callbacks
 ├── tests/
 │   └── test_pipeline_enhancements.py
 ├── data/
@@ -85,266 +74,370 @@ fed_macro_mvp/
 └── outputs/
 ```
 
-Generated during notebook runs:
+Generated artifacts:
 - `data/processed/download_manifest.csv`
-- `data/processed/chunks.parquet`
+- `data/processed/chunks.parquet` (or CSV fallback)
 - `index/fed_chunks.index`
-- `index/fed_chunks_meta.parquet`
+- `index/fed_chunks_meta.parquet` (or CSV fallback)
 - `index/index_config.json`
 - `outputs/hits_<timestamp>.csv`
 - `outputs/macro_answer_<timestamp>.txt`
-- `outputs/macro_answer_<timestamp>.json` (if JSON parse succeeds)
+- `outputs/macro_answer_<timestamp>.json` (when parse/coercion succeeds)
 
-## 5. Environment prerequisites
+## 5) Tech Stack and Why
+This section maps each dependency to its job in the system.
 
-1. Python 3.10+ recommended.
-2. Jupyter Notebook or JupyterLab.
-3. Ollama installed and running locally.
-4. At least one local model pulled in Ollama.
+Core libraries:
+- `requests`, `beautifulsoup4`: scraping and URL discovery.
+- `pypdf`: PDF text extraction.
+- `sentence-transformers`: embeddings for dense retrieval.
+- `faiss-cpu`: local vector index/search.
+- `scikit-learn`: TF-IDF sparse retrieval.
+- `ollama`: local LLM inference client.
+- `json-repair`: malformed JSON recovery.
+- `pyarrow`: parquet support (with CSV fallback).
+- `ipywidgets`: interactive notebook UI.
+- `pandas`, `numpy`, `tqdm`: data/metrics/iteration utilities.
 
-Example:
+Design tradeoff:
+- Chosen for local runnability and robustness over maximal model sophistication.
+
+## 6) Runtime Profiles and Config Model
+This section explains how scope and speed are controlled.
+
+`core/config.py` defines `PipelineConfig` and defaults.
+
+### 6.1 `fast_default` (recommended day-to-day)
+- `days_back=180`
+- `max_pdfs=24`
+- `allowed_doc_types=["fomc_minutes", "mpr"]`
+
+Why: faster turnaround and fresher macro signal for investor workflows.
+
+### 6.2 `full_default`
+- `days_back=540`
+- `max_pdfs=40`
+- `allowed_doc_types=["all"]`
+
+Why: broader history and coverage when speed is less important.
+
+### 6.3 Important knobs for section-4 latency/quality
+- `top_k_topic`
+- `context_chunks_per_topic`
+- `max_chars_per_chunk`
+- `max_context_chars`
+- `ollama_num_predict`
+- `enable_reranker`
+- retry controls: `ollama_max_retries`, `retry_context_shrink`, `retry_predict_shrink`
+
+## 7) End-to-End Architecture (Internal Flow)
+This section is the deep implementation walkthrough interviewers usually ask for.
+
+### Stage A: Ingestion (`core/ingest.py`)
+1. Discover candidate links from Fed seed pages.
+2. Probe date-based known filename patterns:
+   - `fomcminutesYYYYMMDD.pdf`
+   - `monetaryYYYYMMDDa1.pdf`
+3. Normalize PDF URLs and extract date hints.
+4. Classify document type (`fomc_minutes`, `mpr`, `other`).
+5. Apply filters:
+   - valid parseable date
+   - inside active lookback window (`days_back`)
+   - allowed doc type set from profile
+6. Recency sort and download up to `max_pdfs`.
+7. Persist download manifest.
+
+Guardrails:
+- Fast profile warning if docs exceed cap.
+
+### Stage B: Indexing (`core/indexing.py`)
+1. Read downloaded PDFs with `pypdf`.
+2. Normalize whitespace and chunk text (`chunk_size`, `chunk_overlap`).
+3. Build metadata rows with:
+   - `chunk_id`, `doc_id`, `doc_type`, `date_hint`, `topic_flags`, `text`
+4. Generate embeddings (`all-MiniLM-L6-v2`).
+5. L2-normalize embeddings and write FAISS `IndexFlatIP`.
+6. Save metadata table and index config.
+
+Fallback behavior:
+- If parquet unavailable, metadata/chunks are saved as CSV and the pipeline continues.
+
+### Stage C: Retrieval (`core/retrieval.py`)
+For each macro topic:
+1. Build base query + optional deterministic query variants.
+2. Run dense retrieval (FAISS cosine via normalized inner product).
+3. Run sparse retrieval (TF-IDF) if enabled.
+4. Fuse candidate rankings with Reciprocal Rank Fusion (RRF).
+5. Optional cross-encoder rerank over top pool.
+6. Apply recency weighting (`recency_boost`, half-life decay).
+7. Keep top hits per topic (`top_k_topic`).
+
+Then context construction:
+- Extract topic-focused snippets from retrieved chunk text.
+- Budget context across topics so every topic gets coverage before deeper detail.
+- Track `context_chunk_ids` used for downstream citation validation.
+
+### Stage D: Generation (`core/generation.py`)
+1. Verify Ollama server availability and model presence (`/api/tags`).
+2. Build strict system instruction:
+   - JSON only
+   - fixed top keys
+   - required topic list
+   - evidence/citation chunk IDs must come from provided context
+3. Generate via Ollama chat with `format="json"`.
+4. Retry plan shrinks context and/or output length if parsing/quality fails.
+5. Parse robustly:
+   - direct JSON parse
+   - balanced-object extraction
+   - optional `json-repair`
+   - final repair pass via short LLM repair prompt
+
+### Stage E: Validation and Coercion (`core/validation.py`)
+1. Canonicalize/normalize output object.
+2. Force `generated_at_utc` to current run ISO UTC.
+3. Ensure required schema keys exist.
+4. Enforce exactly required topic set in `topic_signals`.
+5. Normalize evidence chunk IDs against valid retrieved IDs.
+6. Backfill evidence from topic hits if missing (`enforce_topic_min_evidence=True`).
+7. Deduplicate and cap citations; add quote snippets from chunk text.
+8. Produce validation report (`missing_top_keys`, `bad_shape`, ID integrity, missing topics).
+
+### Stage F: Orchestration + Metrics (`core/analysis.py`, `core/pipeline.py`)
+- Executes retrieval + generation and returns:
+  - topic summary table
+  - merged hits table
+  - attempt log
+  - normalized JSON text
+  - citation preview table (`doc_id`, `chunk_id`, `quote`)
+  - timings and warning signals
+
+### Stage G: Persistence (`core/artifacts.py`)
+- Saves hits CSV + raw LLM text + parsed JSON (if available) under `outputs/`.
+
+## 8) Notebooks and Intended Usage
+This section tells you which notebook to open for what objective.
+
+1. `fed_macro_v3_investor_ui.ipynb`
+- Primary demo notebook for users/interview walkthrough.
+- Launches interactive widgets from `core/investor_ui.py`.
+- Best for showing investor-centric usage and controls.
+
+2. `fed_macro_v2.ipynb`
+- Technical notebook for pipeline execution with transparent dataframes and diagnostics.
+
+3. `fed_macro_v1.ipynb`
+- Legacy retained for historical context; not preferred for current flow.
+
+## 9) Investor UI Behavior (`core/investor_ui.py`)
+This section details what the UI does internally.
+
+Controls:
+- Profile selector (`fast_default` / `full_default`)
+- Run mode (`refresh_all` / `analysis_only`)
+- Topic focus (all or one macro topic)
+- Speed-quality sliders (`top_k_topic`, `max_context_chars`, `ollama_num_predict`)
+- Optional reranker toggle
+
+Tabs:
+1. Dashboard:
+- investor brief
+- regime cards (growth, inflation, policy, recession risk, confidence badge)
+- run metrics and analysis metrics
+- warning list
+
+2. Topic Drilldown:
+- topic signal table
+- evidence quote table by selected topic
+- investor takeaway cards
+
+3. Normalized JSON:
+- exact post-processed JSON object used for persistence
+
+## 10) Running the Project
+This section is the reproducible runbook.
+
+### 10.1 Setup
 ```bash
-ollama serve
-ollama pull mistral:7b-instruct
+cd /Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-If your model tag differs, update `OLLAMA_MODEL` in the notebook config cell.
+### 10.2 Ollama readiness
+```bash
+ollama serve
+ollama list
+ollama pull llama3:8b
+curl http://127.0.0.1:11434/api/tags
+```
 
-## 6. Step-by-step runbook
+If model tag differs, update `cfg.ollama_model` in notebook config/override cell.
 
-Open:
-- `fed_macro_mvp/fed_macro_v3_investor_ui.ipynb` (recommended investor UI)
-- `fed_macro_mvp/fed_macro_v2.ipynb` (technical streamlined workflow)
-- `fed_macro_mvp/fed_macro_v1.ipynb` (legacy notebook retained)
+### 10.3 Notebook execution order
+1. Open `fed_macro_v3_investor_ui.ipynb` for investor demo or `fed_macro_v2.ipynb` for technical run.
+2. Run dependency/import/config cells.
+3. Pick profile (`fast_default` recommended for iteration speed).
+4. Run ingestion/indexing (or `analysis_only` if index already exists).
+5. Run analysis and inspect attempt log + checks.
+6. Save outputs.
 
-Run cells top-to-bottom:
+## 11) Data Contracts (Output Schema)
+This section is useful for interview Q&A on reliability and integration readiness.
 
-1. **Install dependencies**
-   - Executes `%pip install ...`
-   - Safe to skip if already installed.
+Top-level JSON keys:
+- `generated_at_utc`
+- `executive_summary`
+- `regime_call`
+- `topic_signals`
+- `investor_takeaways`
+- `citations`
 
-2. **Imports + configuration**
-   - Creates required subfolders:
-     - `data/raw_pdfs`
-     - `data/processed`
-     - `index`
-     - `outputs`
-  - Config now supports profile-based defaults:
-    - `profile_name`: `fast_default` or `full_default`
-    - `allowed_doc_types`: doc scope (`fomc_minutes`, `mpr`, or `all`)
-    - `enforce_topic_min_evidence`: enforce at least one evidence chunk per topic
-  - Fast defaults:
-    - `days_back=180`
-    - `max_pdfs=24`
-    - `allowed_doc_types=["fomc_minutes","mpr"]`
-  - One-line profile switch in Section 2 overrides:
-    - `cfg.set_profile("fast_default")` or `cfg.set_profile("full_default")`
-   - Tune latency/quality controls:
-     - `TOP_K_TOPIC`
-     - `CONTEXT_CHUNKS_PER_TOPIC`
-     - `MAX_CHARS_PER_CHUNK`
-     - `MAX_CONTEXT_CHARS`
-     - `OLLAMA_NUM_PREDICT`
-     - `OLLAMA_NUM_CTX`
-     - `OLLAMA_TEMPERATURE`
-     - `ENABLE_HYBRID_RETRIEVAL`
-     - `ENABLE_QUERY_FUSION`
-     - `ENABLE_RERANKER`
-     - `RERANK_MODEL_NAME`
-     - `OLLAMA_MAX_RETRIES`
-     - `RETRY_CONTEXT_SHRINK`
-     - `RETRY_PREDICT_SHRINK`
-     - `USE_JSON_REPAIR`
+Constraints:
+- `topic_signals` must represent exactly:
+  - `inflation`, `unemployment`, `growth`, `policy_rates`, `financial_conditions`, `credit`
+- Evidence IDs must map to retrieved valid `chunk_id`s.
+- Citations are deduplicated and capped.
+- Citation quote snippets are populated from retrieved chunk text when available.
 
-3. **Discover + download Federal Reserve PDFs**
-  - Scrapes PDF links from configured Fed seed pages.
-  - Probes common Fed filenames by date:
-    - `fomcminutesYYYYMMDD.pdf`
-    - `monetaryYYYYMMDDa1.pdf`
-  - Adds `doc_type` metadata at ingestion time (`fomc_minutes`, `mpr`, `other`).
-  - Keeps only documents with valid date hints inside the configured lookback window.
-  - Applies `allowed_doc_types` filtering (fast profile keeps only FOMC minutes + MPR).
-  - Combines + deduplicates + recency-sorts.
-  - Downloads up to `MAX_PDFS`.
-  - Writes `download_manifest.csv`.
+## 12) Testing
+This section shows what is currently protected by automated tests.
 
-4. **Parse + chunk + index**
-   - Extracts text from each downloaded PDF.
-   - Chunks long text (`CHUNK_SIZE`, `CHUNK_OVERLAP`).
-   - Flags topic keyword presence.
-   - Embeds chunks with SentenceTransformers.
-   - Builds FAISS index.
-   - Saves index + metadata + index config.
+Run tests:
+```bash
+cd /Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp
+python -m unittest -q tests/test_pipeline_enhancements.py
+```
 
-5. **Retrieval + local LLM macro synthesis**
-   - Runs targeted retrieval per investor-relevant macro topic:
-     - inflation
-     - unemployment
-     - growth
-     - policy rates
-     - financial conditions
-     - credit
-   - Uses robust hybrid retrieval:
-     - dense semantic retrieval (FAISS)
-     - sparse lexical retrieval (TF-IDF)
-     - reciprocal-rank fusion (RRF)
-   - Optional cross-encoder reranking on top candidate pool (safe fallback when disabled or unavailable).
-   - Uses query-fusion per topic with deterministic query variants.
-   - Applies recency-aware scoring so newer Fed communication receives moderate preference.
-   - Extracts topic-focused snippets to reduce context length and latency.
-   - Reserves context budget across topics so one compact evidence chunk per topic is favored before adding more detail.
-   - Sends compact, structured context to Ollama with speed-oriented options (`num_predict`, `num_ctx`, low temperature).
-   - Requests investor-grade strict JSON output containing:
-     - regime call
-     - topic signals
-     - investor takeaways by horizon
-     - evidence links (`chunk_id`-based citations)
-     - citation quotes (short verbatim snippets from retrieved chunk text)
-   - Prints retrieval and LLM latency to make runtime bottlenecks explicit.
-   - Uses retry fallback for generation: if parsing/quality fails, retries with smaller context and lower `num_predict`.
-   - Uses robust JSON parsing with balanced-object extraction and optional `json-repair`.
-   - Includes final JSON-repair fallback via a short local LLM “repair pass” when direct parsing fails.
-   - Applies deterministic post-processing to coerce near-valid outputs into schema-compliant JSON:
-     - topic normalization (`policy_rate` -> `policy_rates`, etc.)
-     - chunk ID normalization/fixing for common format drift
-     - evidence/citation backfill from retrieved topic hits when sparse
-   - Notebook display now prints normalized/coerced JSON (`analysis_result['normalized_json_text']`) when available.
-   - `generated_at_utc` is normalized to current-run ISO UTC format.
-   - Section 4 displays a citation preview table (`doc_id`, `chunk_id`, `quote`) for investor readability.
+Current coverage:
+- Profile defaults and profile switching behavior.
+- Catalog filtering by doc type and date window.
+- Evidence minimum enforcement and citation quote generation.
 
-6. **Basic MVP quality checks**
-  - Parse JSON from model output.
-  - Verify schema shape and section presence.
-  - Verify citation and evidence chunk IDs exist in retrieved context.
-  - Verify expected macro topics are covered.
-  - Enforce minimum per-topic evidence when `enforce_topic_min_evidence=True`.
+## 13) Major Issues Encountered and How They Were Resolved
+This section documents real implementation failures and practical fixes.
 
-7. **Save artifacts**
-   - Writes retrieval table and model outputs under `outputs/`.
+1. Parquet engine ImportError (`pyarrow`/`fastparquet` missing)
+- Symptom: `DataFrame.to_parquet` failed during chunk persistence.
+- Fix:
+  - added `pyarrow` to requirements
+  - implemented parquet->CSV fallback in indexing save path
+- Result: pipeline no longer blocks on parquet availability.
 
-8. **Investor UI mode (`fed_macro_v3_investor_ui.ipynb`)**
-   - Interactive controls for:
-     - profile (`fast_default` / `full_default`)
-     - run mode (`refresh_all` / `analysis_only`)
-     - topic focus (`all` or a specific macro topic)
-     - latency-quality knobs (`top_k_topic`, `max_context_chars`, `ollama_num_predict`, reranker toggle)
-   - Dashboard tab presents:
-     - investor brief summary
-     - regime card view (growth/inflation/policy/risk/confidence)
-     - run + analysis metrics and warnings
-   - Topic Drilldown tab presents:
-     - filtered topic signals
-     - evidence quotes mapped to selected topic
-     - investor takeaways
-   - Normalized JSON tab presents:
-     - post-processed, validated JSON output used for persistence
+2. Ollama connection/model mismatch
+- Symptom: `ConnectionError: Failed to connect to Ollama` and model not found errors.
+- Fix:
+  - added explicit Ollama readiness check (`/api/tags`)
+  - clearer error messages for missing model tag
+  - standardized default model to `llama3:8b`
+- Result: fail-fast diagnostics before long pipeline stages.
 
-## 7. Current implementation status
+3. Long and fragile generation stage (JSON parse failures)
+- Symptom: frequent `parse_failed`, truncated JSON, malformed shapes.
+- Fix:
+  - retry plan with shrinking context/predict budgets
+  - balanced JSON extraction
+  - optional `json-repair`
+  - final LLM repair pass
+  - deterministic coercion/normalization after parse
+- Result: significantly higher success rate and fewer hard failures.
 
-As of **March 18, 2026**:
+4. Invalid evidence/citation IDs from model output
+- Symptom: IDs not matching retrieved chunk format; validation failures.
+- Fix:
+  - ID resolver for common formatting drift
+  - topic-based fallback evidence injection
+  - strict validation report and quality gate
+- Result: evidence/citation integrity became stable.
 
-- [x] New clean folder created for restart.
-- [x] End-to-end notebook workflow implemented (`fed_macro_v2.ipynb`).
-- [x] Local/open-source components only in current workflow.
-- [x] Retrieval-backed generation with citation validation hooks.
-- [x] Output persistence for reproducibility.
-- [x] Hybrid retrieval (dense + sparse + RRF) with recency-aware ranking.
-- [x] Topic query-fusion for investor-focused evidence gathering.
-- [x] Optional cross-encoder reranking stage with safe fallback.
-- [x] Core analysis split into `retrieval.py`, `generation.py`, and `validation.py` for cleaner notebooks and maintainability.
-- [ ] Real run validation against live Federal Reserve endpoints in this environment.
-- [x] Prompt/schema hardening for stricter JSON reliability.
-- [x] Profile-based runtime defaults (`fast_default` / `full_default`) with one-line notebook switching.
-- [x] Source filtering by date window + doc type metadata (`doc_type` in manifest/chunks).
-- [x] Fast-profile guardrails with warnings for doc/chunk volume.
-- [x] Stronger evidence hygiene with minimum evidence per topic (configurable).
-- [x] Investor-readable citations include short quote snippets plus source IDs.
-- [x] Interactive investor UI notebook (`fed_macro_v3_investor_ui.ipynb`) with topic-focused drilldown.
+5. Non-ISO or stale timestamps in generated JSON
+- Symptom: model emitted invalid or outdated `generated_at_utc`.
+- Fix:
+  - force timestamp server-side during post-processing (`ISO UTC`).
+- Result: consistent run-time timestamp semantics.
 
-## 8. Known limitations in v1
+6. Notebook install-cell error with `ipywidgets>=8.1.0`
+- Symptom: `zsh: 8.1.0 not found` due to shell interpretation.
+- Fix:
+  - moved widget dependency into `requirements.txt`
+  - simplified notebook install cell to `-r requirements.txt`.
+- Result: stable dependency install cell behavior.
 
-- Fast profile intentionally narrows scope to FOMC minutes and MPR documents for speed.
-- Full profile remains broader but can still be slower on local CPU.
-- Some Federal Reserve communications are HTML/non-PDF and are intentionally out-of-scope for this MVP.
-- PDF text extraction quality depends on source formatting (scanned docs can degrade extraction).
-- Citation quality is retrieval-dependent and should be reviewed before production use.
+7. Notebook bloat and maintainability issues
+- Symptom: overly long cells, hard debugging, low readability.
+- Fix:
+  - extracted logic to `core/*.py` modules
+  - created UI module `core/investor_ui.py`
+  - reduced notebook to orchestration/presentation calls
+- Result: cleaner notebooks and testable modules.
 
-## 9. Troubleshooting
+8. Nested project-path confusion (`fed_macro_mvp/fed_macro_mvp`)
+- Symptom: path resolution inconsistencies in some runs.
+- Fix:
+  - improved notebook marker detection in `PipelineConfig.__post_init__`.
+- Result: more resilient path initialization.
 
-1. **No PDFs downloaded**
-  - Check internet connectivity from notebook environment.
-  - Confirm Federal Reserve pages are reachable.
-  - Switch to `full_default` or increase `days_back` / `max_pdfs`.
-  - Check `allowed_doc_types` is not too restrictive.
+## 14) Performance Notes and Practical Defaults
+This section gives realistic operating guidance.
 
-2. **FAISS build fails**
-   - Ensure `faiss-cpu` installed successfully.
-   - Restart kernel after install cell.
+Observed practical guidance:
+- Keep `fast_default` for iterative runs.
+- If LLM stage is slow, reduce:
+  - `max_context_chars`
+  - `ollama_num_predict`
+  - `top_k_topic`
+- Keep reranker disabled for CPU-only quick runs.
+- Use `analysis_only` mode when index already exists.
 
-3. **Ollama connection error**
-   - Confirm `ollama serve` is running.
-   - Confirm model is pulled locally.
-   - Check `OLLAMA_HOST` and `OLLAMA_MODEL`.
+## 15) Interview Walkthrough Guide (How to Explain This Project)
+This section is your quick speaking script for resume discussions.
 
-4. **Model output not valid JSON**
-   - Reduce temperature.
-   - Tighten prompt instructions.
-   - Keep retry logic enabled (`OLLAMA_MAX_RETRIES`).
-   - Reduce `MAX_CONTEXT_CHARS` and `OLLAMA_NUM_PREDICT`.
-   - Keep `USE_JSON_REPAIR = True`.
-   - Keep `CONTEXT_CHUNKS_PER_TOPIC = 1` for faster, more stable structure completion.
+Suggested explanation sequence:
+1. Problem framing:
+- “I needed a local, investor-facing macro analysis workflow using official Fed communications.”
 
-5. **Section 4 is too slow**
-  - Reduce `TOP_K_TOPIC` (for example `3 -> 2`).
-  - Reduce `MAX_CHARS_PER_CHUNK` and `MAX_CONTEXT_CHARS`.
-  - Reduce `OLLAMA_NUM_PREDICT`.
-  - Keep `ENABLE_RERANKER = False` for fastest baseline.
-  - Use a faster local model if needed.
-  - Keep `profile_name='fast_default'` for shorter ingestion/index cycles.
+2. Data layer:
+- “I scrape/probe Fed PDFs, classify doc types, and filter by recency window/profile.”
 
-## 10. Enhancement Priority (Robustness First)
+3. Retrieval layer:
+- “I chunk and embed text into FAISS, add TF-IDF sparse retrieval, and fuse with RRF for robustness.”
 
-Ordered by implementation realism and low bug risk.
+4. Generation layer:
+- “I generate strict JSON with local Ollama, enforce schema and citation integrity, and retry/repair malformed generations.”
 
-1. **Hybrid retrieval + query-fusion + recency scoring** (`Implemented`)
-2. **Schema-constrained investor output + strict validation** (`Implemented`)
-3. **Cross-encoder reranking on top-N candidates** (`Implemented, optional toggle`)
-4. **Evaluation harness (RAGAS + TruLens) integrated into run path** (`Next`)
-5. **Broader source coverage (Fed speeches/testimony) + source quality filters** (`Next`)
-6. **Scheduled incremental ingestion + index refresh** (`Next`)
-7. **Web interface over stable notebook workflow** (`Later`)
+5. Trust layer:
+- “Each topic includes evidence chunk IDs and quote snippets so users can inspect exact source text.”
 
-## 11. Living change log
+6. Product layer:
+- “I exposed this via an interactive notebook UI where users control scope/profile and drill into topic evidence.”
 
-### 2026-03-15
-- Initialized clean restart folder `fed_macro_mvp/`.
-- Built notebook `fed_macro_mvp.ipynb` with end-to-end MVP pipeline.
-- Added this comprehensive README as the implementation source of truth.
-- Added parquet resilience: default `pyarrow` dependency plus automatic CSV fallback for table persistence.
-- Tightened generation schema and validation checks so section-level `evidence` is validated as retrieved `chunk_id` references, not free-text claims.
-- Refactored Section 4 for speed and investor use-case:
-  - topic-targeted retrieval
-  - context compaction per topic
-  - explicit investor-grade JSON schema (`regime_call`, `topic_signals`, `investor_takeaways`)
-  - stronger validation for evidence IDs and citations
-- Added Ollama schema-constrained generation (`format=<JSON schema>`) for more reliable structured output.
-- Added topic coverage validation so outputs are checked for all expected macro topics.
-- Added robustness-first retrieval stack:
-  - dense + sparse hybrid retrieval
-  - reciprocal-rank fusion (RRF)
-  - deterministic per-topic query fusion
-  - recency-aware ranking boost
-- Added optional reranker tier (`ENABLE_RERANKER`) using a cross-encoder over top candidates with safe fallback.
-- Added explicit `scikit-learn` dependency for sparse retrieval.
-- Added generation retry/fallback logic to reduce JSON truncation failures under slow local inference.
-- Added robust parse recovery path (`extract_balanced_json` + `json-repair`) for malformed/partially emitted JSON.
-- Added a compact generation contract and conservative retry schedule to reduce truncation and malformed JSON rates on CPU-bound local models.
-- Refactored notebook code into modular Python files under `core/`.
+7. Engineering quality:
+- “I modularized notebook logic into testable Python files and added unit tests for key robustness behaviors.”
 
-### 2026-03-18
-- Added profile-aware ingestion defaults and filtering:
-  - `fast_default` (`days_back=180`, `max_pdfs=24`, `allowed_doc_types=['fomc_minutes','mpr']`)
-  - `full_default` (`days_back=540`, `max_pdfs=40`, `allowed_doc_types=['all']`)
-- Added ingestion/index/analysis guardrail metrics and warning surfaces.
-- Added evidence hygiene control (`enforce_topic_min_evidence`) and tests.
-- Added interactive investor dashboard notebook `fed_macro_v3_investor_ui.ipynb`.
+## 16) Known Limitations and Next Steps
+This section is candid about MVP boundaries and realistic improvements.
+
+Current limitations:
+- PDF text extraction lacks page-coordinate citation granularity.
+- Retrieval quality is good for MVP but not benchmarked with formal RAG metrics yet.
+- Index rebuild can be expensive on repeated full-refresh runs.
+
+Near-term enhancements (practical):
+1. Incremental ingestion/indexing cache (skip unchanged docs/chunks by content hash).
+2. Page-level citation support and richer evidence rendering in UI.
+3. Lightweight evaluation suite (topic coverage, citation precision proxy, latency tracking over runs).
+
+## 17) Living Document Note
+This section states maintenance expectations.
+
+This README is intended to be updated whenever:
+- architecture changes,
+- config defaults change,
+- schema contracts change,
+- major failure modes/fixes are discovered.
+
+If this project is resumed after a gap, start with:
+1. Section 6 (profiles),
+2. Section 7 (architecture flow),
+3. Section 13 (issues/fixes),
+4. Section 15 (interview walkthrough).
