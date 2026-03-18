@@ -77,6 +77,7 @@ def build_chunks(download_manifest: pd.DataFrame, cfg: PipelineConfig) -> pd.Dat
                     "doc_id": fpath.name,
                     "pdf_url": row.get("pdf_url", ""),
                     "date_hint": row.get("date_hint", ""),
+                    "doc_type": row.get("doc_type", ""),
                     "chunk_index": idx,
                     "text": part,
                     "topic_flags": topic_flags(part, cfg.focus_topics),

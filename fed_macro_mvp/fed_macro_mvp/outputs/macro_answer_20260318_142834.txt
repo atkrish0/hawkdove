@@ -1,0 +1,51 @@
+{
+"generated_at_utc": 1643723400,
+"executive_summary": "Recent Federal Reserve communications suggest a mixed macro view for the US economy.",
+"regime_call": {
+    "growth_momentum": "Moderate",
+    "inflation_trend": "Upswing",
+    "policy_bias": "Neutral",
+    "recession_risk": "Low",
+    "confidence": 0.85
+},
+"topic_signals": {
+    "inflation": {
+        "topic": "inflation",
+        "view": "Upswing",
+        "confidence": 0.89,
+        "evidence": [
+            {
+                "chunk_id": "fomcminutes20251210.pdf::chunk0022",
+                "doc_id": "fomcminutes20251210.pdf"
+            }
+        ]
+    },
+    "unemployment": {
+        "topic": "unemployment",
+        "view": "Stable",
+        "confidence": 0.88,
+        "evidence": [
+            {
+                "chunk_id": "fomcminutes20251210.pdf::chunk0014",
+                "doc_id": "fomcminutes20251210.pdf"
+            }
+        ]
+    },
+    "growth": {
+        "topic": "growth",
+        "view": "Moderate",
+        "confidence": 0.94,
+        "evidence": [
+            {
+                "chunk_id": "fomcminutes20260128.pdf::chunk0040",
+                "doc_id": "fomcminutes20260128.pdf"
+            }
+        ]
+    },
+    "policy_rates": {
+        "topic": "policy_rates",
+        "view": "Neutral",
+        "confidence": 0.85,
+        "evidence": [
+            {
+                "chunk_id": "monetary20251029a1.pdf::

@@ -1,0 +1,22 @@
+{
+"generated_at_utc": 1664414400,
+"executive_summary": "Recent Federal Reserve communications suggest a more gradual approach to recalibrating monetary policy, amid stronger-than-expected economic data and somewhat higher-than-expected inflation readings.",
+"regime_call": {
+    "growth_momentum": "Moderate",
+    "inflation_trend": "Somewhat Higher",
+    "policy_bias": "Gradual",
+    "recession_risk": "Low",
+    "confidence": 0.7
+},
+"topic_signals": [
+    {"topic": "inflation", "view": "Somewhat Higher", "confidence": 0.7017, "evidence": ["FOMC minutes 20241107.pdf::chunk0011"]},
+    {"topic": "unemployment", "view": "Edged Up", "confidence": 0.8231, "evidence": ["FOMC minutes 20250917.pdf::chunk0020"]},
+    {"topic": "growth", "view": "Moderate", "confidence": 0.7236, "evidence": ["20250207_mprfullreport.pdf::chunk0175"]},
+    {"topic": "policy_rates", "view": "Gradual", "confidence": 0.7236, "evidence": ["20250207_mprfullreport.pdf::chunk0175"]},
+    {"topic": "financial_conditions", "view": "Weaker-than-Expected", "confidence": 0.6926, "evidence": ["FOMC minutes 20240918.pdf::chunk0000"]}
+],
+"investor_takeaways": [
+    {
+        "horizon": "Short-Term",
+        "thesis": "Gradual monetary policy recalibration amid moderate growth and somewhat higher inflation.",
+        "evidence": ["FOMC minutes 20241107.pdf::chunk0011", "FOMC minutes 202509

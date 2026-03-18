@@ -57,9 +57,16 @@ class PipelineConfig:
     index_dir: Path = field(init=False)
     output_dir: Path = field(init=False)
 
+    # Runtime profile
+    profile_name: str = "fast_default"
+    allowed_doc_types: list[str] = field(default_factory=lambda: ["fomc_minutes", "mpr"])
+    enforce_topic_min_evidence: bool = True
+    fast_profile_doc_warning: int = 24
+    fast_profile_chunk_warning: int = 1200
+
     # Collection
-    days_back: int = 540
-    max_pdfs: int = 40
+    days_back: int = 180
+    max_pdfs: int = 24
     request_timeout: int = 20
 
     # Chunking / indexing
@@ -122,19 +129,51 @@ class PipelineConfig:
     topic_query_variants: dict[str, list[str]] = field(default_factory=lambda: DEFAULT_TOPIC_QUERY_VARIANTS.copy())
 
     def __post_init__(self) -> None:
-        if not (self.project_dir / "fed_macro_mvp.ipynb").exists() and (self.project_dir / "fed_macro_mvp").exists():
-            self.project_dir = self.project_dir / "fed_macro_mvp"
+        notebook_markers = [
+            "fed_macro_v1.ipynb",
+            "fed_macro_v2.ipynb",
+            "fed_macro_v3_investor_ui.ipynb",
+            "fed_macro_mvp.ipynb",
+        ]
+        has_notebook_here = any((self.project_dir / x).exists() for x in notebook_markers)
+        nested_dir = self.project_dir / "fed_macro_mvp"
+        has_notebook_nested = nested_dir.exists() and any((nested_dir / x).exists() for x in notebook_markers)
+        if not has_notebook_here and has_notebook_nested:
+            self.project_dir = nested_dir
 
         self.data_dir = self.project_dir / "data"
         self.raw_pdf_dir = self.data_dir / "raw_pdfs"
         self.processed_dir = self.data_dir / "processed"
         self.index_dir = self.project_dir / "index"
         self.output_dir = self.project_dir / "outputs"
+        self._normalize_profile()
         self.ensure_dirs()
 
     def ensure_dirs(self) -> None:
         for p in [self.raw_pdf_dir, self.processed_dir, self.index_dir, self.output_dir]:
             p.mkdir(parents=True, exist_ok=True)
+
+    def _normalize_profile(self) -> None:
+        if self.profile_name not in {"fast_default", "full_default"}:
+            self.profile_name = "fast_default"
+
+        if not self.allowed_doc_types:
+            self.allowed_doc_types = ["fomc_minutes", "mpr"] if self.profile_name == "fast_default" else ["all"]
+
+    def set_profile(self, profile_name: str) -> None:
+        profile = str(profile_name or "").strip().lower()
+        if profile not in {"fast_default", "full_default"}:
+            raise ValueError("profile_name must be 'fast_default' or 'full_default'")
+
+        self.profile_name = profile
+        if profile == "fast_default":
+            self.days_back = 180
+            self.max_pdfs = 24
+            self.allowed_doc_types = ["fomc_minutes", "mpr"]
+        else:
+            self.days_back = 540
+            self.max_pdfs = 40
+            self.allowed_doc_types = ["all"]
 
 
 def default_config(project_dir: Path | None = None) -> PipelineConfig:

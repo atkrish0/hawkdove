@@ -1,0 +1,121 @@
+{
+  "generated_at_utc": "2026-03-18T18:28:34Z",
+  "executive_summary": "Recent Federal Reserve communications suggest a mixed macro view for the US economy.",
+  "regime_call": {
+    "growth_momentum": "Moderate",
+    "inflation_trend": "Upswing",
+    "policy_bias": "Neutral",
+    "recession_risk": "Low",
+    "confidence": "0.85"
+  },
+  "topic_signals": [
+    {
+      "topic": "inflation",
+      "view": "No clear signal",
+      "confidence": "medium",
+      "evidence": [
+        "fomcminutes20251210.pdf::chunk0022",
+        "fomcminutes20251210.pdf::chunk0034"
+      ]
+    },
+    {
+      "topic": "unemployment",
+      "view": "No clear signal",
+      "confidence": "medium",
+      "evidence": [
+        "fomcminutes20251210.pdf::chunk0014",
+        "fomcminutes20251210.pdf::chunk0027"
+      ]
+    },
+    {
+      "topic": "growth",
+      "view": "No clear signal",
+      "confidence": "medium",
+      "evidence": [
+        "fomcminutes20260128.pdf::chunk0040",
+        "fomcminutes20251210.pdf::chunk0016"
+      ]
+    },
+    {
+      "topic": "policy_rates",
+      "view": "No clear signal",
+      "confidence": "medium",
+      "evidence": [
+        "monetary20251029a1.pdf::chunk0002",
+        "monetary20251210a1.pdf::chunk0002"
+      ]
+    },
+    {
+      "topic": "financial_conditions",
+      "view": "No clear signal",
+      "confidence": "medium",
+      "evidence": [
+        "fomcminutes20251029.pdf::chunk0002",
+        "fomcminutes20251029.pdf::chunk0016"
+      ]
+    },
+    {
+      "topic": "credit",
+      "view": "No clear signal",
+      "confidence": "medium",
+      "evidence": [
+        "fomcminutes20260128.pdf::chunk0015",
+        "fomcminutes20251210.pdf::chunk0019"
+      ]
+    }
+  ],
+  "investor_takeaways": [
+    {
+      "horizon": "6-12 months",
+      "thesis": "Recent Federal Reserve communications suggest a mixed macro view for the US economy.",
+      "evidence": [
+        "fomcminutes20251210.pdf::chunk0022",
+        "fomcminutes20251210.pdf::chunk0034",
+        "fomcminutes20251210.pdf::chunk0014",
+        "fomcminutes20251210.pdf::chunk0027"
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "chunk_id": "fomcminutes20251210.pdf::chunk0022",
+      "doc_id": "fomcminutes20251210.pdf",
+      "quote": "2027 and 2028. Tariff increases were expected to continue to put upward pressure on inflation this year and next. Thereafter, inflation was projected to return to its previous disinflationary trend and to reach 2 percent"
+    },
+    {
+      "chunk_id": "fomcminutes20251210.pdf::chunk0034",
+      "doc_id": "fomcminutes20251210.pdf",
+      "quote": "the target range for the federal funds rate, some participants suggested that, under their economic outlooks, it would likely be appropriate to keep the target range unchanged for some time after a lowering of the range "
+    },
+    {
+      "chunk_id": "fomcminutes20251210.pdf::chunk0014",
+      "doc_id": "fomcminutes20251210.pdf",
+      "quote": "ecessary to implement the Committee\u2019s framework could lead to excessive risk-taking by leveraged investors. Staff Review of the Economic Situation The information available at the time of the meeting indicated that real "
+    },
+    {
+      "chunk_id": "fomcminutes20251210.pdf::chunk0027",
+      "doc_id": "fomcminutes20251210.pdf",
+      "quote": "ekly initial unemployment insurance claims and measures of job postings, suggested more stability. Several participants commented that lower-income households were especially concerned about their employment prospects. P"
+    },
+    {
+      "chunk_id": "fomcminutes20260128.pdf::chunk0040",
+      "doc_id": "fomcminutes20260128.pdf",
+      "quote": "the discussion of developments in financial markets and open market operations. 16 January 27\u201328, 2026 Burcu Duygan-Bump, Senior Associate Director, Division of Research and Statistics, Board Laura J. Feiveson, Special A"
+    },
+    {
+      "chunk_id": "fomcminutes20251210.pdf::chunk0016",
+      "doc_id": "fomcminutes20251210.pdf",
+      "quote": "e available indicators suggested that real GDP growth was solid in the third quarter, although the average rate of increase over the first three quarters of the year was moderate and slower than its 2024 pace. Real priva"
+    },
+    {
+      "chunk_id": "monetary20251029a1.pdf::chunk0002",
+      "doc_id": "monetary20251029a1.pdf",
+      "quote": "Philip N. Jefferson; Alberto G. Musalem; and Christopher J. Waller. Voting against this action were Stephen I. Miran, who preferred to lower the target range for the federal funds rate by 1/2 percentage point at this mee"
+    },
+    {
+      "chunk_id": "monetary20251210a1.pdf::chunk0002",
+      "doc_id": "monetary20251210a1.pdf",
+      "quote": "air; John C. Williams, Vice Chair; Michael S. Barr; Michelle W. Bowman; Susan M. Collins; Lisa D. Cook; Philip N. Jefferson; Alberto G. Musalem; and Christopher J. Waller. Voting against this action were Stephen I. Miran"
+    }
+  ]
+}

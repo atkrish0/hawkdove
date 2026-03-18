@@ -215,8 +215,13 @@ def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFram
             continue
 
         parsed_obj = postprocess_obj(parsed_obj)
-        parsed_obj = coerce_investor_json(parsed_obj, topic_hits, valid_ids)
-        q = validate_investor_json(parsed_obj, valid_ids)
+        parsed_obj = coerce_investor_json(
+            parsed_obj,
+            topic_hits,
+            valid_ids,
+            enforce_topic_min_evidence=cfg.enforce_topic_min_evidence,
+        )
+        q = validate_investor_json(parsed_obj, valid_ids, enforce_topic_min_evidence=cfg.enforce_topic_min_evidence)
         ok = quality_ok(q)
 
         logs.append(
@@ -238,8 +243,13 @@ def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFram
     repaired = repair_json_with_llm(last_text, cfg, num_predict=max(220, int(cfg.ollama_num_predict * 0.75)))
     if repaired is not None:
         repaired = postprocess_obj(repaired)
-        repaired = coerce_investor_json(repaired, topic_hits, last_valid_ids)
-        rq = validate_investor_json(repaired, last_valid_ids)
+        repaired = coerce_investor_json(
+            repaired,
+            topic_hits,
+            last_valid_ids,
+            enforce_topic_min_evidence=cfg.enforce_topic_min_evidence,
+        )
+        rq = validate_investor_json(repaired, last_valid_ids, enforce_topic_min_evidence=cfg.enforce_topic_min_evidence)
         logs.append(
             {
                 "attempt": len(attempts) + 1,

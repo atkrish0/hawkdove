@@ -12,6 +12,7 @@ from .retrieval import build_sparse_index, load_bundle, load_reranker, retrieve_
 
 def run_analysis(cfg: PipelineConfig) -> dict[str, object]:
     index, meta_df, emb_model = load_bundle(cfg)
+    analysis_warnings: list[str] = []
 
     sparse_t0 = time.time()
     sparse_bundle = build_sparse_index(meta_df)
@@ -50,6 +51,13 @@ def run_analysis(cfg: PipelineConfig) -> dict[str, object]:
     llm_t0 = time.time()
     llm_text, parsed, quality, attempt_log, final_context, context_chunk_ids = run_generation_with_retries(question, topic_hits, cfg)
     llm_latency = time.time() - llm_t0
+
+    index_doc_count = int(meta_df["doc_id"].nunique()) if not meta_df.empty and "doc_id" in meta_df.columns else 0
+    index_chunk_count = int(len(meta_df))
+    if cfg.profile_name == "fast_default" and index_chunk_count > cfg.fast_profile_chunk_warning:
+        analysis_warnings.append(
+            f"fast_default: indexed chunks {index_chunk_count} exceed recommended cap {cfg.fast_profile_chunk_warning}"
+        )
 
     normalized_json_text = llm_text
     citation_preview_df = pd.DataFrame(columns=["chunk_id", "doc_id", "quote"])
@@ -95,4 +103,10 @@ def run_analysis(cfg: PipelineConfig) -> dict[str, object]:
             "retrieval_latency_s": retrieval_latency,
             "llm_stage_s": llm_latency,
         },
+        "analysis_counts": {
+            "index_docs": index_doc_count,
+            "index_chunks": index_chunk_count,
+            "retrieved_unique_chunks": int(len(hits_df)),
+        },
+        "analysis_warnings": analysis_warnings,
     }

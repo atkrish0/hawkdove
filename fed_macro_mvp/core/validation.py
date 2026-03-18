@@ -126,7 +126,12 @@ def fallback_ids_by_topic(topic_hits: dict[str, pd.DataFrame]) -> dict[str, list
     return out
 
 
-def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFrame], valid_ids: set[str]) -> dict[str, Any]:
+def coerce_investor_json(
+    parsed: dict[str, Any],
+    topic_hits: dict[str, pd.DataFrame],
+    valid_ids: set[str],
+    enforce_topic_min_evidence: bool = True,
+) -> dict[str, Any]:
     obj = parsed if isinstance(parsed, dict) else {}
 
     # Always stamp generation time to the current run in normalized ISO UTC format.
@@ -151,6 +156,12 @@ def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFr
 
     fbt = fallback_ids_by_topic(topic_hits)
     text_lookup = _chunk_text_lookup(topic_hits)
+    global_fallback = []
+    for topic in REQUIRED_TOPICS:
+        global_fallback.extend(fbt.get(topic, []))
+    global_fallback = [x for x in dict.fromkeys(global_fallback) if x]
+    if not global_fallback:
+        global_fallback = sorted(valid_ids)
 
     existing_map: dict[str, dict[str, Any]] = {}
     topic_signals = obj.get("topic_signals")
@@ -166,6 +177,8 @@ def coerce_investor_json(parsed: dict[str, Any], topic_hits: dict[str, pd.DataFr
     for topic in REQUIRED_TOPICS:
         src = existing_map.get(topic, {})
         ev = normalize_evidence_list(src.get("evidence", []), valid_ids, fallback_ids=fbt.get(topic, []), max_items=3)
+        if enforce_topic_min_evidence and not ev:
+            ev = normalize_evidence_list([], valid_ids, fallback_ids=global_fallback, max_items=1)
         normalized_signals.append(
             {
                 "topic": topic,
@@ -252,7 +265,7 @@ def postprocess_obj(obj: dict[str, Any]) -> dict[str, Any]:
     return obj
 
 
-def validate_investor_json(parsed: dict[str, Any], valid_ids: set[str]) -> dict[str, Any]:
+def validate_investor_json(parsed: dict[str, Any], valid_ids: set[str], enforce_topic_min_evidence: bool = True) -> dict[str, Any]:
     required_top = ["generated_at_utc", "executive_summary", "regime_call", "topic_signals", "investor_takeaways", "citations"]
     report = {
         "missing_top_keys": [k for k in required_top if k not in parsed],
@@ -281,7 +294,7 @@ def validate_investor_json(parsed: dict[str, Any], valid_ids: set[str]) -> dict[
         if not isinstance(ev, list):
             report["bad_shape"].append(f"topic_signals[{i}].evidence")
         else:
-            if len(ev) == 0:
+            if enforce_topic_min_evidence and len(ev) == 0:
                 report["bad_shape"].append(f"topic_signals[{i}].evidence_empty")
             for e in ev:
                 if e not in valid_ids:

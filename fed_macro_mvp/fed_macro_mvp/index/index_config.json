@@ -1,0 +1,8 @@
+{
+  "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "dimension": 384,
+  "rows": 171,
+  "created_utc": "2026-03-18T18:26:32.372229+00:00",
+  "index_path": "/Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp/fed_macro_mvp/index/fed_chunks.index",
+  "meta_path": "/Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp/fed_macro_mvp/index/fed_chunks_meta.parquet"
+}

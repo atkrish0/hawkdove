@@ -37,6 +37,17 @@ def extract_date_hint(text: str) -> str | None:
     return f"{y.group(1)}-01-01" if y else None
 
 
+def classify_doc_type(url_or_name: str) -> str:
+    name = Path(str(url_or_name or "")).name.lower()
+    if re.search(r"fomcminutes20\d{6}\.pdf$", name):
+        return "fomc_minutes"
+    if re.search(r"monetary20\d{6}a1\.pdf$", name):
+        return "mpr"
+    if "mprfullreport" in name:
+        return "mpr"
+    return "other"
+
+
 def scrape_seed_pages(cfg: PipelineConfig) -> pd.DataFrame:
     rows = []
     session = requests.Session()
@@ -63,11 +74,12 @@ def scrape_seed_pages(cfg: PipelineConfig) -> pd.DataFrame:
                     "pdf_url": pdf_url,
                     "title": title,
                     "date_hint": extract_date_hint(pdf_url),
+                    "doc_type": classify_doc_type(pdf_url),
                 }
             )
 
     if not rows:
-        return pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint"])
+        return pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint", "doc_type"])
     return pd.DataFrame(rows).drop_duplicates(subset=["pdf_url"]).reset_index(drop=True)
 
 
@@ -99,12 +111,45 @@ def probe_known_patterns(cfg: PipelineConfig) -> pd.DataFrame:
                         "pdf_url": url,
                         "title": fname,
                         "date_hint": dt.isoformat(),
+                        "doc_type": classify_doc_type(fname),
                     }
                 )
 
     if not rows:
-        return pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint"])
+        return pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint", "doc_type"])
     return pd.DataFrame(rows).drop_duplicates(subset=["pdf_url"]).reset_index(drop=True)
+
+
+def apply_catalog_filters(catalog_df: pd.DataFrame, cfg: PipelineConfig, today_utc: datetime | None = None) -> pd.DataFrame:
+    if catalog_df.empty:
+        return catalog_df
+
+    out = catalog_df.copy()
+    if "doc_type" not in out.columns:
+        out["doc_type"] = out["pdf_url"].apply(classify_doc_type)
+
+    out["parsed_date"] = pd.to_datetime(out["date_hint"], errors="coerce", utc=True)
+    out = out[out["parsed_date"].notna()].copy()
+    if out.empty:
+        return out
+
+    if today_utc is None:
+        today_utc = datetime.now(timezone.utc)
+    today = today_utc.date()
+    cutoff = today - timedelta(days=max(1, int(cfg.days_back)))
+    out["_date"] = out["parsed_date"].dt.date
+    out = out[(out["_date"] >= cutoff) & (out["_date"] <= today)].copy()
+
+    allowed = {str(x).lower() for x in (cfg.allowed_doc_types or ["all"])}
+    if allowed and "all" not in allowed:
+        out = out[out["doc_type"].str.lower().isin(allowed)].copy()
+
+    if out.empty:
+        return out.drop(columns=["_date"], errors="ignore")
+
+    out["age_days"] = (today_utc - out["parsed_date"]).dt.days
+    out = out.sort_values(["parsed_date", "age_days"], ascending=[False, True], na_position="last")
+    return out.drop(columns=["_date"], errors="ignore").reset_index(drop=True)
 
 
 def build_catalog(cfg: PipelineConfig) -> pd.DataFrame:
@@ -113,9 +158,7 @@ def build_catalog(cfg: PipelineConfig) -> pd.DataFrame:
     combined = pd.concat([seed, patt], ignore_index=True).drop_duplicates(subset=["pdf_url"])
     if combined.empty:
         return combined
-
-    combined["parsed_date"] = pd.to_datetime(combined["date_hint"], errors="coerce")
-    return combined.sort_values("parsed_date", ascending=False, na_position="last").reset_index(drop=True)
+    return apply_catalog_filters(combined, cfg)
 
 
 def download_catalog(catalog_df: pd.DataFrame, cfg: PipelineConfig) -> pd.DataFrame:
@@ -148,11 +191,32 @@ def download_catalog(catalog_df: pd.DataFrame, cfg: PipelineConfig) -> pd.DataFr
     return pd.DataFrame(rows)
 
 
-def run_ingestion(cfg: PipelineConfig) -> tuple[pd.DataFrame, pd.DataFrame, Path | None]:
+def run_ingestion(cfg: PipelineConfig) -> tuple[pd.DataFrame, pd.DataFrame, Path | None, dict[str, object]]:
     catalog_df = build_catalog(cfg)
     download_df = download_catalog(catalog_df, cfg)
     manifest_path = None
     if not download_df.empty:
         manifest_path = cfg.processed_dir / "download_manifest.csv"
         download_df.to_csv(manifest_path, index=False)
-    return catalog_df, download_df, manifest_path
+
+    available_count = 0
+    if not download_df.empty and "status" in download_df.columns:
+        available_count = int(download_df["status"].isin(["downloaded", "exists"]).sum())
+
+    warnings = []
+    if cfg.profile_name == "fast_default":
+        if available_count > cfg.fast_profile_doc_warning:
+            warnings.append(
+                f"fast_default: available docs {available_count} exceed recommended cap {cfg.fast_profile_doc_warning}"
+            )
+
+    stats: dict[str, object] = {
+        "profile_name": cfg.profile_name,
+        "days_back": cfg.days_back,
+        "max_pdfs": cfg.max_pdfs,
+        "catalog_candidates": int(len(catalog_df)),
+        "download_attempted": int(len(download_df)),
+        "downloaded_or_exists": available_count,
+        "warnings": warnings,
+    }
+    return catalog_df, download_df, manifest_path, stats
