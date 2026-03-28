@@ -1,0 +1,2 @@
+timestamp,status,reason,json_path,hits_path
+20260315_200341,quality_reject,"{'missing_top_keys': ['generated_at_utc', 'regime_call', 'topic_signals', 'investor_takeaways'], 'bad_shape': ['topic_signals'], 'missing_topics': ['credit', 'financial_conditions', 'growth', 'inflation', 'policy_rates', 'unemployment'], 'extra_topics': [], 'invalid_evidence_ids': [], 'invalid_citation_ids': []}",/Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp/outputs/macro_answer_20260315_200341.json,/Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp/outputs/hits_20260315_200341.csv

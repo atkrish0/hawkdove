@@ -1,0 +1,7 @@
+{
+  "status": "skipped_training_disabled_by_default",
+  "hint": "Set HAWKDOVE_ENABLE_TRAIN=1 and install requirements-train.txt to run LoRA training.",
+  "train_path": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/datasets/sft_train.jsonl",
+  "val_path": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/datasets/sft_val.jsonl",
+  "output_dir": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/lora/hawkdove_v1"
+}

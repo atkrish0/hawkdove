@@ -1,0 +1,14 @@
+{
+  "pairs_found": 6,
+  "accepted": 5,
+  "rejected": 1,
+  "train": 3,
+  "val": 1,
+  "test": 1,
+  "paths": {
+    "all": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/datasets/sft_dataset_all.jsonl",
+    "train": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/datasets/sft_train.jsonl",
+    "val": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/datasets/sft_val.jsonl",
+    "test": "/Users/atheeshkrishnan/AK/DEV/hawkdove/hawkdove_model_lab/artifacts/datasets/sft_test.jsonl"
+  }
+}
