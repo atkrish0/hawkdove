@@ -133,86 +133,9 @@ Why: broader history and coverage when speed is less important.
 ## 7) End-to-End Architecture (Internal Flow)
 This section is the deep implementation walkthrough interviewers usually ask for.
 
-### Stage A: Ingestion (`core/ingest.py`)
-1. Discover candidate links from Fed seed pages.
-2. Probe date-based known filename patterns:
-   - `fomcminutesYYYYMMDD.pdf`
-   - `monetaryYYYYMMDDa1.pdf`
-3. Normalize PDF URLs and extract date hints.
-4. Classify document type (`fomc_minutes`, `mpr`, `other`).
-5. Apply filters:
-   - valid parseable date
-   - inside active lookback window (`days_back`)
-   - allowed doc type set from profile
-6. Recency sort and download up to `max_pdfs`.
-7. Persist download manifest.
+The detailed architecture has been split into a dedicated living document:
 
-Guardrails:
-- Fast profile warning if docs exceed cap.
-
-### Stage B: Indexing (`core/indexing.py`)
-1. Read downloaded PDFs with `pypdf`.
-2. Normalize whitespace and chunk text (`chunk_size`, `chunk_overlap`).
-3. Build metadata rows with:
-   - `chunk_id`, `doc_id`, `doc_type`, `date_hint`, `topic_flags`, `text`
-4. Generate embeddings (`all-MiniLM-L6-v2`).
-5. L2-normalize embeddings and write FAISS `IndexFlatIP`.
-6. Save metadata table and index config.
-
-Fallback behavior:
-- If parquet unavailable, metadata/chunks are saved as CSV and the pipeline continues.
-
-### Stage C: Retrieval (`core/retrieval.py`)
-For each macro topic:
-1. Build base query + optional deterministic query variants.
-2. Run dense retrieval (FAISS cosine via normalized inner product).
-3. Run sparse retrieval (TF-IDF) if enabled.
-4. Fuse candidate rankings with Reciprocal Rank Fusion (RRF).
-5. Optional cross-encoder rerank over top pool.
-6. Apply recency weighting (`recency_boost`, half-life decay).
-7. Keep top hits per topic (`top_k_topic`).
-
-Then context construction:
-- Extract topic-focused snippets from retrieved chunk text.
-- Budget context across topics so every topic gets coverage before deeper detail.
-- Track `context_chunk_ids` used for downstream citation validation.
-
-### Stage D: Generation (`core/generation.py`)
-1. Verify Ollama server availability and model presence (`/api/tags`).
-2. Build strict system instruction:
-   - JSON only
-   - fixed top keys
-   - required topic list
-   - evidence/citation chunk IDs must come from provided context
-3. Generate via Ollama chat with `format="json"`.
-4. Retry plan shrinks context and/or output length if parsing/quality fails.
-5. Parse robustly:
-   - direct JSON parse
-   - balanced-object extraction
-   - optional `json-repair`
-   - final repair pass via short LLM repair prompt
-
-### Stage E: Validation and Coercion (`core/validation.py`)
-1. Canonicalize/normalize output object.
-2. Force `generated_at_utc` to current run ISO UTC.
-3. Ensure required schema keys exist.
-4. Enforce exactly required topic set in `topic_signals`.
-5. Normalize evidence chunk IDs against valid retrieved IDs.
-6. Backfill evidence from topic hits if missing (`enforce_topic_min_evidence=True`).
-7. Deduplicate and cap citations; add quote snippets from chunk text.
-8. Produce validation report (`missing_top_keys`, `bad_shape`, ID integrity, missing topics).
-
-### Stage F: Orchestration + Metrics (`core/analysis.py`, `core/pipeline.py`)
-- Executes retrieval + generation and returns:
-  - topic summary table
-  - merged hits table
-  - attempt log
-  - normalized JSON text
-  - citation preview table (`doc_id`, `chunk_id`, `quote`)
-  - timings and warning signals
-
-### Stage G: Persistence (`core/artifacts.py`)
-- Saves hits CSV + raw LLM text + parsed JSON (if available) under `outputs/`.
+- [END_TO_END_ARCHITECTURE.md](END_TO_END_ARCHITECTURE.md)
 
 ## 8) Notebooks and Intended Usage
 This section tells you which notebook to open for what objective.
@@ -389,32 +312,7 @@ Observed practical guidance:
 - Keep reranker disabled for CPU-only quick runs.
 - Use `analysis_only` mode when index already exists.
 
-## 15) Interview Walkthrough Guide (How to Explain This Project)
-This section is your quick speaking script for resume discussions.
-
-Suggested explanation sequence:
-1. Problem framing:
-- “I needed a local, investor-facing macro analysis workflow using official Fed communications.”
-
-2. Data layer:
-- “I scrape/probe Fed PDFs, classify doc types, and filter by recency window/profile.”
-
-3. Retrieval layer:
-- “I chunk and embed text into FAISS, add TF-IDF sparse retrieval, and fuse with RRF for robustness.”
-
-4. Generation layer:
-- “I generate strict JSON with local Ollama, enforce schema and citation integrity, and retry/repair malformed generations.”
-
-5. Trust layer:
-- “Each topic includes evidence chunk IDs and quote snippets so users can inspect exact source text.”
-
-6. Product layer:
-- “I exposed this via an interactive notebook UI where users control scope/profile and drill into topic evidence.”
-
-7. Engineering quality:
-- “I modularized notebook logic into testable Python files and added unit tests for key robustness behaviors.”
-
-## 16) Known Limitations and Next Steps
+## 15) Known Limitations and Next Steps
 This section is candid about MVP boundaries and realistic improvements.
 
 Current limitations:
@@ -427,7 +325,7 @@ Near-term enhancements (practical):
 2. Page-level citation support and richer evidence rendering in UI.
 3. Lightweight evaluation suite (topic coverage, citation precision proxy, latency tracking over runs).
 
-## 17) Living Document Note
+## 16) Living Document Note
 This section states maintenance expectations.
 
 This README is intended to be updated whenever:
