@@ -1,0 +1,109 @@
+{
+  "title": "Fed Macro RAG Observability",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Run Count",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "questdb"
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "select count(*) as value from rag_events where event_type = 'run_started' and ts_utc > dateadd('h', -24, now())",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Failure Events (24h)",
+      "type": "stat",
+      "datasource": {
+        "type": "postgres",
+        "uid": "questdb"
+      },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "select count(*) as value from rag_events where status in ('failed', 'parse_failed', 'quality_failed', 'repaired_quality_failed', 'empty') and ts_utc > dateadd('h', -24, now())",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Stage Latency",
+      "type": "timeseries",
+      "datasource": {
+        "type": "postgres",
+        "uid": "questdb"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "select ts_utc as time, stage, avg(duration_ms) as value from rag_events where duration_ms is not null and $__timeFilter(ts_utc) sample by 1m fill(null)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Events by Stage",
+      "type": "barchart",
+      "datasource": {
+        "type": "postgres",
+        "uid": "questdb"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "select stage, count(*) as value from rag_events where $__timeFilter(ts_utc) group by stage order by value desc",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Recent Generation Attempts",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "questdb"
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "select ts_utc, run_id, status, payload_attempt as attempt, payload_context_chars as context_chars, payload_num_predict as num_predict, payload_citation_count as citation_count from rag_events where event_type = 'generation_attempt' and $__timeFilter(ts_utc) order by ts_utc desc limit 50",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "templating": { "list": [] },
+  "time": { "from": "now-24h", "to": "now" }
+}

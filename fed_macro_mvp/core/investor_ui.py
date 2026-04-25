@@ -124,6 +124,8 @@ def launch_investor_dashboard(cfg: PipelineConfig):
             timings = analysis.get("timings", {})
             counts = analysis.get("analysis_counts", {})
             stage_metrics = (ingest or {}).get("stage_metrics", {}) if ingest else {}
+            diagnostics_summary = analysis.get("diagnostics_summary", {})
+            diagnostics_paths = analysis.get("diagnostics_paths", {})
 
             headline = escape(str(parsed.get("executive_summary", "No summary generated yet.")))
             growth = escape(str(regime.get("growth_momentum", "n/a")))
@@ -151,6 +153,7 @@ def launch_investor_dashboard(cfg: PipelineConfig):
             if stage_metrics:
                 display(Markdown("### Run Metrics"))
                 metrics = {
+                    "run_id": analysis.get("run_id", "n/a"),
                     "profile": stage_metrics.get("profile_name", "n/a"),
                     "catalog_candidates": stage_metrics.get("catalog_candidates", "n/a"),
                     "downloaded_or_exists": stage_metrics.get("downloaded_or_exists", "n/a"),
@@ -164,9 +167,18 @@ def launch_investor_dashboard(cfg: PipelineConfig):
                 "retrieved_unique_chunks": counts.get("retrieved_unique_chunks", "n/a"),
                 "llm_stage_s": round(timings.get("llm_stage_s", 0), 2),
                 "retrieval_latency_s": round(timings.get("retrieval_latency_s", 0), 2),
+                "warning_count": diagnostics_summary.get("warning_count", 0),
             }
             display(Markdown("### Analysis Metrics"))
             display(pd.DataFrame([llm_metrics]))
+
+            if diagnostics_paths:
+                display(Markdown("### Diagnostics"))
+                diag = {
+                    "events_path": diagnostics_paths.get("events_path", "n/a"),
+                    "summary_path": diagnostics_paths.get("summary_path", "n/a"),
+                }
+                display(pd.DataFrame([diag]))
 
             if analysis.get("analysis_warnings"):
                 display(Markdown("### Warnings"))
@@ -211,6 +223,14 @@ def launch_investor_dashboard(cfg: PipelineConfig):
                 display(Markdown("No topic rows available for the selected focus."))
                 return
 
+            topic_retrieval_df = analysis.get("topic_retrieval_df", pd.DataFrame())
+            if topic_retrieval_df is not None and not topic_retrieval_df.empty:
+                display(Markdown("### Retrieval Health"))
+                if selected == "all":
+                    display(topic_retrieval_df)
+                else:
+                    display(topic_retrieval_df[topic_retrieval_df["topic"] == selected])
+
             display(Markdown("### Evidence Quotes"))
             if citations is None or citations.empty:
                 display(Markdown("No citation preview available."))
@@ -242,6 +262,8 @@ def launch_investor_dashboard(cfg: PipelineConfig):
                 display(Markdown("Run analysis to view normalized JSON output."))
                 return
             print(analysis.get("normalized_json_text", analysis.get("llm_text", "")))
+            if analysis.get("diagnostics_paths"):
+                print("\n[diagnostics]", analysis["diagnostics_paths"].get("run_dir", ""))
 
     def render_all() -> None:
         render_dashboard()
@@ -259,19 +281,29 @@ def launch_investor_dashboard(cfg: PipelineConfig):
             try:
                 if run_mode_dd.value == "refresh_all":
                     print("Running ingestion + indexing...")
-                    state["ingest_index_result"] = run_ingest_and_index(run_cfg)
+                    state["ingest_index_result"] = run_ingest_and_index(run_cfg, mode="refresh_all")
                     stage_metrics = state["ingest_index_result"].get("stage_metrics", {})
                     print("Ingestion/index complete:", stage_metrics)
                     for warning in stage_metrics.get("warnings", []):
                         print("[warn]", warning)
+                    print("Run ID:", state["ingest_index_result"].get("run_id"))
                 else:
                     print("Skipping ingestion/index; using existing local index.")
 
                 print("Running analysis...")
-                state["analysis_result"] = run_full_analysis(run_cfg)
+                observer = (state.get("ingest_index_result") or {}).get("_observer") if run_mode_dd.value == "refresh_all" else None
+                state["analysis_result"] = run_full_analysis(
+                    run_cfg,
+                    observer=observer,
+                    mode=run_mode_dd.value,
+                )
+                print("Run ID:", state["analysis_result"].get("run_id"))
                 print("Analysis completed. LLM latency:", round(state["analysis_result"]["timings"].get("llm_stage_s", 0), 2), "s")
                 for warning in state["analysis_result"].get("analysis_warnings", []):
                     print("[warn]", warning)
+                diag_paths = state["analysis_result"].get("diagnostics_paths", {})
+                if diag_paths.get("run_dir"):
+                    print("Diagnostics:", diag_paths["run_dir"])
             except Exception as e:
                 print("Run failed:", e)
             finally:
@@ -321,4 +353,3 @@ def launch_investor_dashboard(cfg: PipelineConfig):
 
     display(ui)
     return ui
-

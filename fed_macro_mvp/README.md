@@ -63,8 +63,14 @@ fed_macro_mvp/
 │   ├── validation.py                 # schema coercion, evidence/citation checks, normalization
 │   ├── analysis.py                   # orchestration of retrieval + generation + metrics
 │   ├── artifacts.py                  # output save utilities
+│   ├── observability.py              # structured diagnostics events + run artifacts
 │   ├── pipeline.py                   # notebook-facing pipeline wrappers
 │   └── investor_ui.py                # ipywidgets UI components and callbacks
+├── docker-compose.yaml               # local observability stack (QuestDB/Telegraf/Grafana)
+├── telegraf.conf                     # diagnostics tail/parse/forward config
+├── Makefile                          # stack operation shortcuts
+├── grafana/
+│   └── provisioning/                 # datasource + dashboard provisioning
 ├── tests/
 │   └── test_pipeline_enhancements.py
 ├── data/
@@ -98,6 +104,7 @@ Core libraries:
 - `pyarrow`: parquet support (with CSV fallback).
 - `ipywidgets`: interactive notebook UI.
 - `pandas`, `numpy`, `tqdm`: data/metrics/iteration utilities.
+- `telegraf`, `questdb`, `grafana` (Dockerized): observability stack for structured pipeline telemetry.
 
 Design tradeoff:
 - Chosen for local runnability and robustness over maximal model sophistication.
@@ -135,7 +142,7 @@ This section is the deep implementation walkthrough interviewers usually ask for
 
 The detailed architecture has been split into a dedicated living document:
 
-- [END_TO_END_ARCHITECTURE.md](END_TO_END_ARCHITECTURE.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## 8) Notebooks and Intended Usage
 This section tells you which notebook to open for what objective.
@@ -205,6 +212,33 @@ If model tag differs, update `cfg.ollama_model` in notebook config/override cell
 5. Run analysis and inspect attempt log + checks.
 6. Save outputs.
 
+### 10.4 Optional observability stack
+This project now includes a local telemetry stack inspired by the `systematic-trade-monitor` pattern:
+
+1. the macro pipeline emits structured JSON diagnostics to `outputs/diagnostics/<run_id>/events.jsonl`
+2. `telegraf` tails those files
+3. `questdb` stores time-series telemetry
+4. `grafana` visualizes run/stage health and latency
+
+Start the stack:
+```bash
+cd /Users/atheeshkrishnan/AK/DEV/hawkdove/fed_macro_mvp
+make up
+make ps
+```
+
+Endpoints:
+- Grafana: `http://localhost:3000`
+- QuestDB UI / SQL API: `http://localhost:9000`
+- QuestDB ILP: `localhost:9009`
+- QuestDB Postgres wire: `localhost:8812`
+
+Verification flow:
+1. Run a macro analysis locally from notebook/UI.
+2. Confirm `outputs/diagnostics/<run_id>/events.jsonl` exists.
+3. Run `make count` and confirm rows are present in `rag_events`.
+4. Open Grafana and confirm panels populate.
+
 ## 11) Data Contracts (Output Schema)
 This section is useful for interview Q&A on reliability and integration readiness.
 
@@ -236,6 +270,13 @@ Current coverage:
 - Profile defaults and profile switching behavior.
 - Catalog filtering by doc type and date window.
 - Evidence minimum enforcement and citation quote generation.
+- Observability schema and diagnostics artifact persistence.
+
+Operational smoke tests:
+- `docker compose up -d`
+- `make count`
+- inspect `outputs/diagnostics/<run_id>/events.jsonl`
+- open Grafana dashboard `Fed Macro RAG Observability`
 
 ## 13) Major Issues Encountered and How They Were Resolved
 This section documents real implementation failures and practical fixes.
@@ -319,6 +360,7 @@ Current limitations:
 - PDF text extraction lacks page-coordinate citation granularity.
 - Retrieval quality is good for MVP but not benchmarked with formal RAG metrics yet.
 - Index rebuild can be expensive on repeated full-refresh runs.
+- Observability dashboards are local/dev-oriented and do not yet include alerting or hardened auth.
 
 Near-term enhancements (practical):
 1. Incremental ingestion/indexing cache (skip unchanged docs/chunks by content hash).

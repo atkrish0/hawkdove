@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 import re
+import time
 
 import faiss
 import numpy as np
@@ -34,15 +35,31 @@ def load_bundle(cfg: PipelineConfig):
     return index, meta_df, emb_model
 
 
-def load_reranker(cfg: PipelineConfig):
+def load_reranker(cfg: PipelineConfig, observer=None):
     if not cfg.enable_reranker:
         return None
     try:
         from sentence_transformers import CrossEncoder
 
-        return CrossEncoder(cfg.rerank_model_name, max_length=512)
+        reranker = CrossEncoder(cfg.rerank_model_name, max_length=512)
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="reranker_load",
+                status="ok",
+                payload={"model_name": cfg.rerank_model_name},
+            )
+        return reranker
     except Exception as e:
         print(f"[warn] Reranker disabled ({e})")
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="reranker_load",
+                status="failed",
+                payload={"model_name": cfg.rerank_model_name, "error": str(e)},
+                level="warning",
+            )
         return None
 
 
@@ -78,15 +95,41 @@ def dense_retrieve(query: str, index, meta_df: pd.DataFrame, emb_model, top_k: i
     return pd.DataFrame(out).drop_duplicates(subset=["chunk_id"]).sort_values("score", ascending=False).reset_index(drop=True)
 
 
-def build_sparse_index(meta_df: pd.DataFrame):
+def build_sparse_index(meta_df: pd.DataFrame, observer=None):
+    t0 = time.time()
     if not HAVE_SKLEARN:
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="sparse_index_build",
+                status="disabled",
+                payload={"reason": "sklearn_unavailable"},
+                level="warning",
+            )
         return None
     try:
         vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=1, max_df=0.95)
         mat = vec.fit_transform(meta_df["text"].fillna("").astype(str).tolist())
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="sparse_index_build",
+                status="ok",
+                duration_ms=(time.time() - t0) * 1000.0,
+                payload={"rows": int(len(meta_df)), "vocab_size": int(len(vec.vocabulary_))},
+            )
         return vec, mat
     except Exception as e:
         print(f"[warn] Sparse index disabled: {e}")
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="sparse_index_build",
+                status="failed",
+                duration_ms=(time.time() - t0) * 1000.0,
+                payload={"error": str(e)},
+                level="warning",
+            )
         return None
 
 
@@ -138,7 +181,7 @@ def build_topic_queries(topic: str, cfg: PipelineConfig) -> list[str]:
     return list(dict.fromkeys(queries))
 
 
-def apply_reranker(query: str, candidates: pd.DataFrame, reranker, cfg: PipelineConfig) -> pd.DataFrame:
+def apply_reranker(query: str, candidates: pd.DataFrame, reranker, cfg: PipelineConfig, observer=None, topic: str | None = None) -> pd.DataFrame:
     if reranker is None or candidates.empty:
         return candidates
 
@@ -149,6 +192,14 @@ def apply_reranker(query: str, candidates: pd.DataFrame, reranker, cfg: Pipeline
         scores = reranker.predict(pairs)
     except Exception as e:
         print(f"[warn] rerank predict failed: {e}")
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="reranking",
+                status="failed",
+                payload={"topic": topic, "error": str(e)},
+                level="warning",
+            )
         return candidates
 
     work["rerank_score"] = [float(x) for x in scores]
@@ -157,10 +208,12 @@ def apply_reranker(query: str, candidates: pd.DataFrame, reranker, cfg: Pipeline
     return out
 
 
-def retrieve_topic_hybrid(topic: str, index, meta_df: pd.DataFrame, emb_model, sparse_bundle, reranker, cfg: PipelineConfig) -> pd.DataFrame:
+def retrieve_topic_hybrid(topic: str, index, meta_df: pd.DataFrame, emb_model, sparse_bundle, reranker, cfg: PipelineConfig, observer=None) -> pd.DataFrame:
+    t0 = time.time()
     query_fused = []
+    topic_queries = build_topic_queries(topic, cfg)
 
-    for query in build_topic_queries(topic, cfg):
+    for query in topic_queries:
         dense_df = dense_retrieve(query, index, meta_df, emb_model, top_k=cfg.candidates_per_query)
         if cfg.enable_hybrid_retrieval:
             sparse_df = sparse_retrieve(query, sparse_bundle, meta_df, top_k=cfg.candidates_per_query)
@@ -173,6 +226,22 @@ def retrieve_topic_hybrid(topic: str, index, meta_df: pd.DataFrame, emb_model, s
 
     merged = rrf_fuse(query_fused, score_col="score", k=cfg.rrf_k)
     if merged.empty:
+        if observer is not None:
+            observer.emit(
+                "topic_retrieval_summary",
+                stage="retrieval",
+                status="empty",
+                duration_ms=(time.time() - t0) * 1000.0,
+                payload={
+                    "topic": topic,
+                    "queries": topic_queries,
+                    "dense_enabled": True,
+                    "sparse_enabled": cfg.enable_hybrid_retrieval and sparse_bundle is not None,
+                    "reranker_enabled": reranker is not None,
+                    "hit_count": 0,
+                },
+                level="warning",
+            )
         return pd.DataFrame(columns=["chunk_id", "doc_id", "date_hint", "topic_flags", "text", "score", "final_score", "recency"])
 
     mlookup = meta_df.drop_duplicates(subset=["chunk_id"]).set_index("chunk_id")
@@ -197,18 +266,55 @@ def retrieve_topic_hybrid(topic: str, index, meta_df: pd.DataFrame, emb_model, s
         return pd.DataFrame(columns=["chunk_id", "doc_id", "date_hint", "topic_flags", "text", "score", "final_score", "recency"])
 
     out = pd.DataFrame(rows)
-    out = apply_reranker(cfg.topic_queries[topic]["query"], out, reranker, cfg)
+    prerank_ids = out["chunk_id"].head(cfg.top_k_topic).astype(str).tolist()
+    out = apply_reranker(cfg.topic_queries[topic]["query"], out, reranker, cfg, observer=observer, topic=topic)
 
     base_col = "rerank_score" if "rerank_score" in out.columns else "score"
     out["base_score_norm"] = minmax_scale(out[base_col])
     out["recency"] = out["date_hint"].apply(lambda x: recency_score(x, cfg.recency_half_life_days))
     out["final_score"] = out["base_score_norm"] * ((1.0 - cfg.recency_boost) + cfg.recency_boost * out["recency"])
-    return out.sort_values("final_score", ascending=False).reset_index(drop=True).head(cfg.top_k_topic)
+    out = out.sort_values("final_score", ascending=False).reset_index(drop=True).head(cfg.top_k_topic)
+
+    if observer is not None:
+        logged_hits = []
+        max_hits = max(1, int(getattr(cfg, "max_logged_hits_per_topic", 3)))
+        for _, row in out.head(max_hits).iterrows():
+            hit = {
+                "chunk_id": str(row.get("chunk_id", "")),
+                "doc_id": str(row.get("doc_id", "")),
+                "date_hint": str(row.get("date_hint", "")),
+                "score": float(row.get("score", 0.0)),
+                "final_score": float(row.get("final_score", 0.0)),
+                "recency": float(row.get("recency", 0.0)),
+            }
+            if "rerank_score" in row:
+                hit["rerank_score"] = float(row.get("rerank_score", 0.0))
+            if getattr(cfg, "emit_chunk_previews", False) and getattr(cfg, "chunk_preview_chars", 0) > 0:
+                hit["preview"] = str(row.get("text", ""))[: int(cfg.chunk_preview_chars)]
+            logged_hits.append(hit)
+
+        observer.emit(
+            "topic_retrieval_summary",
+            stage="retrieval",
+            status="ok",
+            duration_ms=(time.time() - t0) * 1000.0,
+            payload={
+                "topic": topic,
+                "queries": topic_queries,
+                "dense_enabled": True,
+                "sparse_enabled": cfg.enable_hybrid_retrieval and sparse_bundle is not None,
+                "reranker_enabled": reranker is not None,
+                "hit_count": int(len(out)),
+                "rerank_changed": prerank_ids != out["chunk_id"].astype(str).tolist(),
+                "top_hits": logged_hits,
+            },
+        )
+    return out
 
 
-def retrieve_multi_topic(index, meta_df: pd.DataFrame, emb_model, sparse_bundle, reranker, cfg: PipelineConfig) -> dict[str, pd.DataFrame]:
+def retrieve_multi_topic(index, meta_df: pd.DataFrame, emb_model, sparse_bundle, reranker, cfg: PipelineConfig, observer=None) -> dict[str, pd.DataFrame]:
     return {
-        topic: retrieve_topic_hybrid(topic, index, meta_df, emb_model, sparse_bundle, reranker, cfg)
+        topic: retrieve_topic_hybrid(topic, index, meta_df, emb_model, sparse_bundle, reranker, cfg, observer=observer)
         for topic in cfg.topic_queries
     }
 

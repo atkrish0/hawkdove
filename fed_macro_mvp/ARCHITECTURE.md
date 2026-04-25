@@ -279,36 +279,126 @@ def retrieve_topic_hybrid(topic: str, index, meta_df: pd.DataFrame, emb_model, s
 
 ### 6.1 Dense Retrieval
 
-Dense retrieval embeds the topic query and searches FAISS:
+Dense retrieval is implemented in `dense_retrieve`. For each topic query, the code:
+
+1. encodes the query with the same sentence-transformer used for chunk embeddings,
+2. L2-normalizes the query vector,
+3. searches the FAISS `IndexFlatIP`,
+4. maps returned row IDs back to `chunk_id` values in `meta_df`.
+
+Core code anchor from `core/retrieval.py`:
+
+```python
+def dense_retrieve(query: str, index, meta_df: pd.DataFrame, emb_model, top_k: int) -> pd.DataFrame:
+    q = emb_model.encode([query], convert_to_numpy=True).astype("float32")
+    q = normalize_rows(q)
+    scores, ids = index.search(q, top_k)
+    out = []
+    for score, i in zip(scores[0], ids[0]):
+        if i < 0 or i >= len(meta_df):
+            continue
+        out.append({"chunk_id": meta_df.iloc[int(i)]["chunk_id"], "score": float(score)})
+```
+
+At a conceptual level, dense retrieval embeds the topic query and each chunk into the same semantic vector space. The score is:
 
 $$
-\text{dense_score}(q, c_i) = q^\top c_i
+s_i^{(\mathrm{dense})} = q^\top c_i
 $$
 
-This handles semantic matches like "labor market slack" vs. "employment conditions softened."
+where \(q\) is the normalized query embedding and \(c_i\) is the normalized embedding of chunk \(i\).
+
+In this project, dense retrieval is especially useful when the macro concept is expressed indirectly. A chunk may talk about "moderating wage pressures" or "softening hiring demand" without explicitly saying "unemployment" or "labor market slack." Because the embedding model captures semantic proximity, these chunks can still surface even when the lexical overlap with the query is weak.
+
+What dense retrieval does well here:
+
+- captures paraphrases and concept-level similarity,
+- recovers chunks that are relevant but do not share exact query terms,
+- works well with topic queries phrased as investor-style questions rather than keyword bags.
+
+What it does less well:
+
+- it can miss exact policy phrasing if the semantic similarity is noisy,
+- raw dense scores are not directly comparable to TF-IDF scores,
+- it may retrieve semantically nearby but less term-specific chunks.
 
 ### 6.2 Sparse Retrieval
 
-Sparse retrieval uses TF-IDF with English stop-word removal and unigrams/bigrams:
+Sparse retrieval is implemented through `build_sparse_index` and `sparse_retrieve`. The code fits a `TfidfVectorizer` over all chunk texts using English stop-word removal and unigram/bigram features, then transforms each query into that same sparse vocabulary space.
+
+Core code anchor from `core/retrieval.py`:
+
+```python
+def build_sparse_index(meta_df: pd.DataFrame):
+    if not HAVE_SKLEARN:
+        return None
+    try:
+        vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=1, max_df=0.95)
+        mat = vec.fit_transform(meta_df["text"].fillna("").astype(str).tolist())
+        return vec, mat
+```
+
+```python
+def sparse_retrieve(query: str, sparse_bundle, meta_df: pd.DataFrame, top_k: int) -> pd.DataFrame:
+    if sparse_bundle is None:
+        return pd.DataFrame(columns=["chunk_id", "score"])
+
+    vec, mat = sparse_bundle
+    qv = vec.transform([query])
+    sims = (qv @ mat.T).toarray().ravel()
+```
+
+The weighting intuition is standard TF-IDF:
 
 $$
-\text{tfidf}(t, d) = \text{tf}(t, d) \cdot \text{idf}(t)
+\operatorname{tfidf}(t, d) = \operatorname{tf}(t, d) \cdot \operatorname{idf}(t)
 $$
 
 The query-document score is a dot product between query and document vectors:
 
 $$
-\text{sparse_score}(q, c_i) = v_q^\top v_{c_i}
+s_i^{(\mathrm{sparse})} = v_q^\top v_i
 $$
 
-This helps preserve exact macro terminology such as "federal funds", "PCE", "lending standards", and "Treasury yields."
+where \(v_q\) is the TF-IDF query vector and \(v_i\) is the TF-IDF vector for chunk \(i\).
+
+In this project, sparse retrieval is valuable because Fed communications often rely on repeated institutional phrases and domain terms. Exact expressions like "federal funds rate," "PCE inflation," "credit availability," "lending standards," or "Treasury yields" can be highly informative, and TF-IDF preserves those lexical anchors more faithfully than dense retrieval alone.
+
+What sparse retrieval does well here:
+
+- rewards exact macro and policy terminology,
+- picks up bigrams that matter operationally in Fed language,
+- is often sharper when the user query contains the same language as the source.
+
+What it does less well:
+
+- it is weaker on paraphrases and concept drift,
+- it depends on vocabulary overlap,
+- it can under-rank relevant chunks that describe the same concept with different wording.
+
+### 6.2.1 Dense vs. Sparse in This Project
+
+The two retrieval modes are complementary rather than competing.
+
+- Dense retrieval answers: "Which chunks are semantically about this topic?"
+- Sparse retrieval answers: "Which chunks literally use the words and phrases associated with this topic?"
+
+For this corpus, dense retrieval is better at capturing concept-level macro discussion, while sparse retrieval is better at preserving institutional phrase matching. That matters because Fed text mixes both styles: some passages are formulaic and term-heavy, while others describe similar conditions in broader prose.
+
+In practice:
+
+- for `policy_rates`, sparse retrieval is often strong because phrases like "federal funds rate" and "restrictive stance" matter directly;
+- for `growth` or `unemployment`, dense retrieval can be stronger because the relevant evidence may be phrased more diffusely;
+- for `financial_conditions` and `credit`, both methods help because domain terms matter, but semantic drift across related wording is also common.
 
 ### 6.3 Reciprocal Rank Fusion
 
-Dense and sparse result lists are combined with Reciprocal Rank Fusion. For chunk \(c\), across rankers \(R\), the fusion score is:
+The project uses Reciprocal Rank Fusion because dense and sparse retrieval produce different score scales. FAISS similarity scores and TF-IDF dot products are not directly calibrated, so averaging raw scores would be unstable. RRF avoids that problem by operating on ranks instead of raw score magnitudes.
+
+For chunk \(c\), across rankers \(R\), the fusion score is:
 
 $$
-\text{RRF}(c) = \sum_{r \in R} \frac{1}{k + \text{rank}_r(c)}
+\operatorname{RRF}(c) = \sum_{r \in R} \frac{1}{k + \operatorname{rank}_r(c)}
 $$
 
 Core code anchor from `core/retrieval.py`:
@@ -324,11 +414,26 @@ def rrf_fuse(rank_frames: list[pd.DataFrame], score_col: str, k: int) -> pd.Data
             agg[cid] = agg.get(cid, 0.0) + 1.0 / (k + rank)
 ```
 
-Method rationale:
+How it applies in this project:
+
+1. For each query variant, the pipeline retrieves a dense ranking and, when enabled, a sparse ranking.
+2. Those rankings are fused with RRF into a per-query candidate list.
+3. If query fusion is enabled, the pipeline then applies RRF again across the different query-variant result lists.
+
+So retrieval is effectively a two-stage fusion design:
+
+- stage 1: fuse retrieval modalities for one query,
+- stage 2: fuse multiple phrasing variants of the same topic query.
+
+This is important technically because it reduces sensitivity to any single query wording and any single retrieval mechanism.
+
+Why RRF is a good fit here:
 
 - RRF avoids over-trusting absolute score calibration across dense and sparse methods.
 - It rewards chunks that rank well across multiple retrieval views.
 - It also supports query fusion, where topic variants are retrieved separately and fused again.
+
+What RRF is doing conceptually is rewarding consensus. A chunk does not need to be rank 1 everywhere; it only needs to appear consistently near the top across multiple rankers or query variants. That is a good inductive bias for this problem because robust Fed evidence should often survive several retrieval views.
 
 ### 6.4 Optional Reranking
 
@@ -356,18 +461,18 @@ def apply_reranker(query: str, candidates: pd.DataFrame, reranker, cfg: Pipeline
 Fed communications are time-sensitive. A statement from the most recent meeting should usually matter more than an older statement with similar semantic relevance. The retrieval layer applies exponential decay:
 
 $$
-\text{recency}(d_i) = \exp\left(-\ln(2) \cdot \frac{\text{age_days}(d_i)}{h}\right)
+r_i = \exp\left(-\ln(2) \cdot \frac{a_i}{h}\right)
 $$
 
-where \(h\) is `recency_half_life_days`.
+where \(a_i\) is the age in days of document \(i\), and \(h\) is `recency_half_life_days`.
 
 The final score combines normalized retrieval/rerank score with recency:
 
 $$
-\text{final_score}_i = \text{base_norm}_i \cdot \left((1-b) + b \cdot \text{recency}_i\right)
+s_i^{(\mathrm{final})} = s_i^{(\mathrm{base})} \cdot \left((1-b) + b \cdot r_i\right)
 $$
 
-where \(b\) is `recency_boost`.
+where \(s_i^{(\mathrm{base})}\) is the normalized retrieval score after fusion or reranking, and \(b\) is `recency_boost`.
 
 Core code anchor from `core/retrieval.py`:
 
@@ -377,6 +482,8 @@ out["recency"] = out["date_hint"].apply(lambda x: recency_score(x, cfg.recency_h
 out["final_score"] = out["base_score_norm"] * ((1.0 - cfg.recency_boost) + cfg.recency_boost * out["recency"])
 return out.sort_values("final_score", ascending=False).reset_index(drop=True).head(cfg.top_k_topic)
 ```
+
+This matters in the current project because the corpus is explicitly recent-Fed oriented. Without recency weighting, an older but lexically strong chunk could dominate a newer and more relevant statement. The decay does not replace relevance; it modulates it. A weakly relevant new chunk should still not outrank a highly relevant one, but among similarly relevant candidates, the newer one receives a systematic advantage.
 
 Current implementation status:
 
@@ -623,6 +730,54 @@ Current implementation status:
 
 - Implemented: end-to-end orchestration, diagnostics, metrics, timestamped output persistence.
 - Caveat: output comparison over time is manual; there is no formal run registry or dashboard yet.
+
+## 10.1 Observability Layer
+
+The project now includes an explicit observability layer modeled on the same principle used in `systematic-trade-monitor`: the application emits stable structured telemetry to local files first, and external ingestion/query/visualization happens outside the core pipeline.
+
+For this project, observability is not generic host monitoring. It is pipeline monitoring for:
+
+- ingestion and catalog building,
+- chunking and index construction,
+- sparse index creation,
+- topic retrieval,
+- reranker behavior,
+- context construction,
+- generation attempts,
+- validation and citation grounding,
+- artifact persistence.
+
+The canonical local output is a run-scoped diagnostics bundle:
+
+- `outputs/diagnostics/<run_id>/events.jsonl`
+- `outputs/diagnostics/<run_id>/summary.json`
+- `outputs/diagnostics/<run_id>/topic_retrieval.csv`
+- `outputs/diagnostics/<run_id>/generation_attempts.csv`
+- `outputs/diagnostics/<run_id>/validation_summary.json`
+- `outputs/diagnostics/<run_id>/artifacts_manifest.json`
+
+This file-first design has the same advantages as in the trade-monitor stack:
+
+1. the macro pipeline stays decoupled from QuestDB-specific writes,
+2. runs remain debuggable even without Docker services running,
+3. telemetry can be replayed or tailed after the fact,
+4. ingestion policy stays configurable in Telegraf rather than embedded in the app.
+
+### 10.2 External Telemetry Stack
+
+The external stack is local and Dockerized:
+
+```text
+fed_macro_mvp pipeline
+  -> diagnostics JSONL/artifacts
+  -> Telegraf tail input
+  -> QuestDB time-series storage
+  -> Grafana dashboards
+```
+
+Telegraf tails `outputs/diagnostics/*/events.jsonl`, parses the structured events, and forwards them to QuestDB. Grafana is provisioned against QuestDB and visualizes run count, stage latency, failure rates, generation-attempt behavior, and recent pipeline issues.
+
+The core pipeline remains notebook-first and locally runnable without Docker. The Docker services are an observability extension, not a runtime dependency.
 
 ## 11) Investor UI Layer
 

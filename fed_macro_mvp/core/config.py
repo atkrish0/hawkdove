@@ -56,6 +56,7 @@ class PipelineConfig:
     processed_dir: Path = field(init=False)
     index_dir: Path = field(init=False)
     output_dir: Path = field(init=False)
+    diagnostics_dir: Path = field(init=False)
 
     # Runtime profile
     profile_name: str = "fast_default"
@@ -125,6 +126,14 @@ class PipelineConfig:
     retry_predict_shrink: list[float] = field(default_factory=lambda: [1.0, 1.0, 0.9])
     use_json_repair: bool = True
 
+    # Observability
+    enable_observability: bool = True
+    emit_diagnostics_stdout: bool = False
+    max_logged_hits_per_topic: int = 3
+    emit_chunk_previews: bool = False
+    chunk_preview_chars: int = 0
+    observability_granularity: str = "run_stage_topic_attempt"
+
     topic_queries: dict[str, Any] = field(default_factory=lambda: DEFAULT_TOPIC_QUERIES.copy())
     topic_query_variants: dict[str, list[str]] = field(default_factory=lambda: DEFAULT_TOPIC_QUERY_VARIANTS.copy())
 
@@ -146,11 +155,12 @@ class PipelineConfig:
         self.processed_dir = self.data_dir / "processed"
         self.index_dir = self.project_dir / "index"
         self.output_dir = self.project_dir / "outputs"
+        self.diagnostics_dir = self.output_dir / "diagnostics"
         self._normalize_profile()
         self.ensure_dirs()
 
     def ensure_dirs(self) -> None:
-        for p in [self.raw_pdf_dir, self.processed_dir, self.index_dir, self.output_dir]:
+        for p in [self.raw_pdf_dir, self.processed_dir, self.index_dir, self.output_dir, self.diagnostics_dir]:
             p.mkdir(parents=True, exist_ok=True)
 
     def _normalize_profile(self) -> None:

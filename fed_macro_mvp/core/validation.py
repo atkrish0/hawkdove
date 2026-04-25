@@ -131,8 +131,15 @@ def coerce_investor_json(
     topic_hits: dict[str, pd.DataFrame],
     valid_ids: set[str],
     enforce_topic_min_evidence: bool = True,
-) -> dict[str, Any]:
+    return_meta: bool = False,
+) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
     obj = parsed if isinstance(parsed, dict) else {}
+    meta = {
+        "topic_fallback_injections": 0,
+        "global_fallback_injections": 0,
+        "takeaway_fallback_used": False,
+        "citation_fallback_used": False,
+    }
 
     # Always stamp generation time to the current run in normalized ISO UTC format.
     obj["generated_at_utc"] = _utc_now_iso()
@@ -177,8 +184,12 @@ def coerce_investor_json(
     for topic in REQUIRED_TOPICS:
         src = existing_map.get(topic, {})
         ev = normalize_evidence_list(src.get("evidence", []), valid_ids, fallback_ids=fbt.get(topic, []), max_items=3)
+        if not src.get("evidence") and ev:
+            meta["topic_fallback_injections"] += 1
         if enforce_topic_min_evidence and not ev:
             ev = normalize_evidence_list([], valid_ids, fallback_ids=global_fallback, max_items=1)
+            if ev:
+                meta["global_fallback_injections"] += 1
         normalized_signals.append(
             {
                 "topic": topic,
@@ -218,6 +229,7 @@ def coerce_investor_json(
                 "evidence": all_signal_evidence[:4],
             }
         ]
+        meta["takeaway_fallback_used"] = True
     obj["investor_takeaways"] = norm_takeaways
 
     citations = obj.get("citations")
@@ -255,8 +267,12 @@ def coerce_investor_json(
             )
             if len(norm_citations) >= 8:
                 break
+        if norm_citations:
+            meta["citation_fallback_used"] = True
 
     obj["citations"] = norm_citations
+    if return_meta:
+        return obj, meta
     return obj
 
 

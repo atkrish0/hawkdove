@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
+import time
 
 import pandas as pd
 import requests
@@ -48,7 +49,8 @@ def classify_doc_type(url_or_name: str) -> str:
     return "other"
 
 
-def scrape_seed_pages(cfg: PipelineConfig) -> pd.DataFrame:
+def scrape_seed_pages(cfg: PipelineConfig, observer=None) -> pd.DataFrame:
+    t0 = time.time()
     rows = []
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; hawkdove-mvp/1.0)"})
@@ -79,11 +81,22 @@ def scrape_seed_pages(cfg: PipelineConfig) -> pd.DataFrame:
             )
 
     if not rows:
-        return pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint", "doc_type"])
-    return pd.DataFrame(rows).drop_duplicates(subset=["pdf_url"]).reset_index(drop=True)
+        out = pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint", "doc_type"])
+    else:
+        out = pd.DataFrame(rows).drop_duplicates(subset=["pdf_url"]).reset_index(drop=True)
+    if observer is not None:
+        observer.emit(
+            "stage_completed",
+            stage="ingest_seed_pages",
+            status="ok",
+            duration_ms=(time.time() - t0) * 1000.0,
+            payload={"seed_pages": len(cfg.seed_pages), "candidate_links": int(len(out))},
+        )
+    return out
 
 
-def probe_known_patterns(cfg: PipelineConfig) -> pd.DataFrame:
+def probe_known_patterns(cfg: PipelineConfig, observer=None) -> pd.DataFrame:
+    t0 = time.time()
     base = "https://www.federalreserve.gov/monetarypolicy/files/"
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; hawkdove-mvp/1.0)"})
@@ -116,14 +129,30 @@ def probe_known_patterns(cfg: PipelineConfig) -> pd.DataFrame:
                 )
 
     if not rows:
-        return pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint", "doc_type"])
-    return pd.DataFrame(rows).drop_duplicates(subset=["pdf_url"]).reset_index(drop=True)
+        out = pd.DataFrame(columns=["source", "source_page", "pdf_url", "title", "date_hint", "doc_type"])
+    else:
+        out = pd.DataFrame(rows).drop_duplicates(subset=["pdf_url"]).reset_index(drop=True)
+    if observer is not None:
+        observer.emit(
+            "stage_completed",
+            stage="ingest_pattern_probe",
+            status="ok",
+            duration_ms=(time.time() - t0) * 1000.0,
+            payload={"days_back": int(cfg.days_back), "candidate_links": int(len(out))},
+        )
+    return out
 
 
-def apply_catalog_filters(catalog_df: pd.DataFrame, cfg: PipelineConfig, today_utc: datetime | None = None) -> pd.DataFrame:
+def apply_catalog_filters(
+    catalog_df: pd.DataFrame,
+    cfg: PipelineConfig,
+    today_utc: datetime | None = None,
+    observer=None,
+) -> pd.DataFrame:
     if catalog_df.empty:
         return catalog_df
 
+    initial_count = int(len(catalog_df))
     out = catalog_df.copy()
     if "doc_type" not in out.columns:
         out["doc_type"] = out["pdf_url"].apply(classify_doc_type)
@@ -149,19 +178,61 @@ def apply_catalog_filters(catalog_df: pd.DataFrame, cfg: PipelineConfig, today_u
 
     out["age_days"] = (today_utc - out["parsed_date"]).dt.days
     out = out.sort_values(["parsed_date", "age_days"], ascending=[False, True], na_position="last")
-    return out.drop(columns=["_date"], errors="ignore").reset_index(drop=True)
+    out = out.drop(columns=["_date"], errors="ignore").reset_index(drop=True)
+    if observer is not None:
+        doc_counts = (
+            out["doc_type"].astype(str).value_counts().to_dict()
+            if not out.empty and "doc_type" in out.columns
+            else {}
+        )
+        observer.emit(
+            "stage_completed",
+            stage="catalog_filter",
+            status="ok",
+            payload={
+                "input_candidates": initial_count,
+                "filtered_candidates": int(len(out)),
+                "allowed_doc_types": list(cfg.allowed_doc_types),
+                "doc_type_counts": doc_counts,
+                "days_back": int(cfg.days_back),
+            },
+        )
+    return out
 
 
-def build_catalog(cfg: PipelineConfig) -> pd.DataFrame:
-    seed = scrape_seed_pages(cfg)
-    patt = probe_known_patterns(cfg)
+def build_catalog(cfg: PipelineConfig, observer=None) -> pd.DataFrame:
+    t0 = time.time()
+    seed = scrape_seed_pages(cfg, observer=observer)
+    patt = probe_known_patterns(cfg, observer=observer)
     combined = pd.concat([seed, patt], ignore_index=True).drop_duplicates(subset=["pdf_url"])
     if combined.empty:
+        if observer is not None:
+            observer.emit(
+                "stage_completed",
+                stage="catalog_build",
+                status="ok",
+                duration_ms=(time.time() - t0) * 1000.0,
+                payload={"seed_candidates": int(len(seed)), "pattern_candidates": int(len(patt)), "catalog_candidates": 0},
+            )
         return combined
-    return apply_catalog_filters(combined, cfg)
+    filtered = apply_catalog_filters(combined, cfg, observer=observer)
+    if observer is not None:
+        observer.emit(
+            "stage_completed",
+            stage="catalog_build",
+            status="ok",
+            duration_ms=(time.time() - t0) * 1000.0,
+            payload={
+                "seed_candidates": int(len(seed)),
+                "pattern_candidates": int(len(patt)),
+                "catalog_candidates": int(len(filtered)),
+            },
+        )
+    return filtered
 
 
-def download_catalog(catalog_df: pd.DataFrame, cfg: PipelineConfig) -> pd.DataFrame:
+def download_catalog(catalog_df: pd.DataFrame, cfg: PipelineConfig, observer=None) -> pd.DataFrame:
+    t0 = time.time()
     if catalog_df.empty:
         return catalog_df
 
@@ -188,12 +259,23 @@ def download_catalog(catalog_df: pd.DataFrame, cfg: PipelineConfig) -> pd.DataFr
         except Exception as e:
             rows.append({**row.to_dict(), "local_path": str(local), "status": f"error:{e}"})
 
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    if observer is not None:
+        status_counts = out["status"].astype(str).value_counts().to_dict() if not out.empty else {}
+        observer.emit(
+            "stage_completed",
+            stage="catalog_download",
+            status="ok",
+            duration_ms=(time.time() - t0) * 1000.0,
+            payload={"download_attempted": int(len(out)), "status_counts": status_counts},
+        )
+    return out
 
 
-def run_ingestion(cfg: PipelineConfig) -> tuple[pd.DataFrame, pd.DataFrame, Path | None, dict[str, object]]:
-    catalog_df = build_catalog(cfg)
-    download_df = download_catalog(catalog_df, cfg)
+def run_ingestion(cfg: PipelineConfig, observer=None) -> tuple[pd.DataFrame, pd.DataFrame, Path | None, dict[str, object]]:
+    t0 = time.time()
+    catalog_df = build_catalog(cfg, observer=observer)
+    download_df = download_catalog(catalog_df, cfg, observer=observer)
     manifest_path = None
     if not download_df.empty:
         manifest_path = cfg.processed_dir / "download_manifest.csv"
@@ -219,4 +301,12 @@ def run_ingestion(cfg: PipelineConfig) -> tuple[pd.DataFrame, pd.DataFrame, Path
         "downloaded_or_exists": available_count,
         "warnings": warnings,
     }
+    if observer is not None:
+        observer.emit(
+            "stage_completed",
+            stage="ingestion",
+            status="ok",
+            duration_ms=(time.time() - t0) * 1000.0,
+            payload={**stats, "manifest_path": str(manifest_path) if manifest_path else None},
+        )
     return catalog_df, download_df, manifest_path, stats

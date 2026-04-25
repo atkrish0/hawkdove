@@ -1,11 +1,14 @@
 import unittest
 from datetime import datetime, timezone
+import json
 from pathlib import Path
+import tempfile
 
 import pandas as pd
 
 from core.config import PipelineConfig
 from core.ingest import apply_catalog_filters
+from core.observability import create_recorder
 from core.validation import coerce_investor_json, validate_investor_json
 
 
@@ -16,6 +19,7 @@ class TestPipelineEnhancements(unittest.TestCase):
         self.assertEqual(cfg.days_back, 180)
         self.assertEqual(cfg.max_pdfs, 24)
         self.assertEqual(cfg.allowed_doc_types, ['fomc_minutes', 'mpr'])
+        self.assertTrue(str(cfg.diagnostics_dir).endswith('outputs/diagnostics'))
 
         cfg.set_profile('full_default')
         self.assertEqual(cfg.days_back, 540)
@@ -82,13 +86,57 @@ class TestPipelineEnhancements(unittest.TestCase):
             'citations': [{'chunk_id': 'fomcminutes20260301.pdf::chunk0001'}],
         }
 
-        coerced = coerce_investor_json(parsed, topic_hits, valid_ids, enforce_topic_min_evidence=True)
+        coerced, meta = coerce_investor_json(
+            parsed,
+            topic_hits,
+            valid_ids,
+            enforce_topic_min_evidence=True,
+            return_meta=True,
+        )
         report = validate_investor_json(coerced, valid_ids, enforce_topic_min_evidence=True)
 
         for sig in coerced['topic_signals']:
             self.assertGreaterEqual(len(sig['evidence']), 1)
         self.assertEqual(report['bad_shape'], [])
         self.assertTrue(coerced['citations'][0]['quote'])
+        self.assertGreaterEqual(meta['topic_fallback_injections'], 1)
+
+    def test_observability_recorder_writes_bundle(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg = PipelineConfig(project_dir=Path(tmpdir))
+            recorder = create_recorder(cfg, mode='analysis_only')
+            recorder.emit(
+                'stage_completed',
+                stage='retrieval',
+                status='ok',
+                payload={'topic': 'inflation', 'hit_count': 2},
+                duration_ms=12.5,
+            )
+            recorder.write_topic_retrieval(
+                [{'topic': 'inflation', 'hit_count': 2, 'top_chunk_id': 'doc.pdf::chunk0001'}]
+            )
+            recorder.write_generation_attempts(
+                pd.DataFrame([{'attempt': 1, 'status': 'ok', 'latency_s': 1.2}])
+            )
+            recorder.write_validation_summary({'quality': {'missing_topics': []}})
+            recorder.add_artifact('events', Path(tmpdir) / 'dummy.json')
+            summary = recorder.finalize_run('ok', payload={'question': 'test'})
+
+            run_dir = Path(recorder.diagnostics_paths()['run_dir'])
+            self.assertTrue((run_dir / 'events.jsonl').exists())
+            self.assertTrue((run_dir / 'summary.json').exists())
+            self.assertTrue((run_dir / 'topic_retrieval.csv').exists())
+            self.assertTrue((run_dir / 'generation_attempts.csv').exists())
+            self.assertTrue((run_dir / 'validation_summary.json').exists())
+            self.assertTrue((run_dir / 'artifacts_manifest.json').exists())
+            self.assertEqual(summary['run_id'], recorder.run_id)
+
+            events = (run_dir / 'events.jsonl').read_text().strip().splitlines()
+            self.assertGreaterEqual(len(events), 2)
+            payload = json.loads(events[0])
+            self.assertIn('event_type', payload)
+            self.assertIn('run_id', payload)
+            self.assertIn('payload', payload)
 
 
 if __name__ == '__main__':

@@ -182,19 +182,32 @@ def generation_retry_plan(cfg: PipelineConfig) -> list[dict[str, Any]]:
     return unique
 
 
-def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFrame], cfg: PipelineConfig):
+def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFrame], cfg: PipelineConfig, observer=None):
     attempts = generation_retry_plan(cfg)
     last_text = ""
     last_context = ""
     last_valid_ids: set[str] = set()
     last_parsed = None
     last_quality = None
+    last_coerce_meta = None
     logs = []
     retrieval_valid_ids = collect_valid_ids(topic_hits, per_topic=max(2, cfg.top_k_topic))
 
     for a in attempts:
         context, context_ids = build_investor_context(topic_hits, cfg, max_context_chars=a["context_chars"])
         valid_ids = set(context_ids) | retrieval_valid_ids
+        if observer is not None:
+            observer.emit(
+                "context_build",
+                stage="context_build",
+                status="ok",
+                payload={
+                    "attempt": a["attempt"],
+                    "context_chars": len(context),
+                    "context_chunk_ids": list(context_ids),
+                    "topic_count": int(len(topic_hits)),
+                },
+            )
 
         t0 = time.time()
         text = generate_investor_view(question, context, cfg, num_predict=a["num_predict"])
@@ -211,15 +224,29 @@ def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFram
                     "num_predict": a["num_predict"],
                 }
             )
+            if observer is not None:
+                observer.emit(
+                    "generation_attempt",
+                    stage="generation",
+                    status="parse_failed",
+                    duration_ms=lat * 1000.0,
+                    payload={
+                        "attempt": a["attempt"],
+                        "context_chars": a["context_chars"],
+                        "num_predict": a["num_predict"],
+                    },
+                    level="warning",
+                )
             last_text, last_context, last_valid_ids = text, context, valid_ids
             continue
 
         parsed_obj = postprocess_obj(parsed_obj)
-        parsed_obj = coerce_investor_json(
+        parsed_obj, coerce_meta = coerce_investor_json(
             parsed_obj,
             topic_hits,
             valid_ids,
             enforce_topic_min_evidence=cfg.enforce_topic_min_evidence,
+            return_meta=True,
         )
         q = validate_investor_json(parsed_obj, valid_ids, enforce_topic_min_evidence=cfg.enforce_topic_min_evidence)
         ok = quality_ok(q)
@@ -233,21 +260,41 @@ def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFram
                 "num_predict": a["num_predict"],
             }
         )
+        if observer is not None:
+            observer.emit(
+                "generation_attempt",
+                stage="generation",
+                status="ok" if ok else "quality_failed",
+                duration_ms=lat * 1000.0,
+                payload={
+                    "attempt": a["attempt"],
+                    "context_chars": a["context_chars"],
+                    "num_predict": a["num_predict"],
+                    "citation_count": len(parsed_obj.get("citations", [])) if isinstance(parsed_obj, dict) else 0,
+                    "missing_topics": len(q.get("missing_topics", [])),
+                    "bad_evidence_ids": len(q.get("bad_evidence_ids", [])),
+                    "unknown_citation_ids": len(q.get("unknown_citation_ids", [])),
+                    "coerce_meta": coerce_meta,
+                },
+                level="warning" if not ok else "info",
+            )
 
         last_text, last_context, last_valid_ids = text, context, valid_ids
         last_parsed, last_quality = parsed_obj, q
+        last_coerce_meta = coerce_meta
 
         if ok:
-            return text, parsed_obj, q, pd.DataFrame(logs), context, list(valid_ids)
+            return text, parsed_obj, q, pd.DataFrame(logs), context, list(valid_ids), coerce_meta
 
     repaired = repair_json_with_llm(last_text, cfg, num_predict=max(220, int(cfg.ollama_num_predict * 0.75)))
     if repaired is not None:
         repaired = postprocess_obj(repaired)
-        repaired = coerce_investor_json(
+        repaired, repaired_meta = coerce_investor_json(
             repaired,
             topic_hits,
             last_valid_ids,
             enforce_topic_min_evidence=cfg.enforce_topic_min_evidence,
+            return_meta=True,
         )
         rq = validate_investor_json(repaired, last_valid_ids, enforce_topic_min_evidence=cfg.enforce_topic_min_evidence)
         logs.append(
@@ -259,6 +306,37 @@ def run_generation_with_retries(question: str, topic_hits: dict[str, pd.DataFram
                 "num_predict": None,
             }
         )
-        return last_text, repaired, rq, pd.DataFrame(logs), last_context, list(last_valid_ids)
+        if observer is not None:
+            observer.emit(
+                "generation_attempt",
+                stage="generation",
+                status="repaired_ok" if quality_ok(rq) else "repaired_quality_failed",
+                payload={
+                    "attempt": len(attempts) + 1,
+                    "context_chars": len(last_context),
+                    "num_predict": None,
+                    "citation_count": len(repaired.get("citations", [])) if isinstance(repaired, dict) else 0,
+                    "missing_topics": len(rq.get("missing_topics", [])),
+                    "bad_evidence_ids": len(rq.get("bad_evidence_ids", [])),
+                    "unknown_citation_ids": len(rq.get("unknown_citation_ids", [])),
+                    "coerce_meta": repaired_meta,
+                },
+                level="warning" if not quality_ok(rq) else "info",
+            )
+        return last_text, repaired, rq, pd.DataFrame(logs), last_context, list(last_valid_ids), repaired_meta
 
-    return last_text, last_parsed, last_quality, pd.DataFrame(logs), last_context, list(last_valid_ids)
+    if observer is not None:
+        observer.emit(
+            "generation_attempt",
+            stage="generation",
+            status="failed",
+            payload={
+                "attempts": int(len(logs)),
+                "last_context_chars": len(last_context),
+                "missing_topics": len(last_quality.get("missing_topics", [])) if isinstance(last_quality, dict) else None,
+                "coerce_meta": last_coerce_meta,
+            },
+            level="warning",
+        )
+
+    return last_text, last_parsed, last_quality, pd.DataFrame(logs), last_context, list(last_valid_ids), last_coerce_meta
